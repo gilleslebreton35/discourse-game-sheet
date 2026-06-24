@@ -8,8 +8,7 @@ module DiscourseGameSheet
     before_action :ensure_logged_in
 
     def index
-      # On va rendre une page Discourse normale (pas juste du JSON)
-      render :index
+      render html: "", layout: true
     end
 
     def search
@@ -30,13 +29,10 @@ module DiscourseGameSheet
 
       game_data = BggClient.game(params[:game_id])
 
-      # Traduction via DeepL
       description_fr = DeeplClient.translate(game_data[:description]) if game_data[:description].present?
 
-      # Construction du contenu
       markdown = build_game_markdown(game_data, description_fr, params)
 
-      # Création du topic
       topic_opts = {
         title: game_data[:name],
         raw: markdown,
@@ -59,21 +55,17 @@ module DiscourseGameSheet
     def build_game_markdown(game_data, description_fr, params)
       markdown = ""
 
-      # Image principale
       markdown += "![#{game_data[:name]}](#{game_data[:image]})\n\n" if game_data[:image].present?
 
-      # Encart d'infos
       markdown += "> **Note BGG :** #{game_data[:rating] || "N/A"} ⭐  \n"
       markdown += "> **Joueurs :** #{game_data[:minplayers] || "?"} - #{game_data[:maxplayers] || "?"}  \n"
       markdown += "> **Durée :** #{game_data[:playingtime] || "?"} min  \n"
       markdown += "> **Âge :** #{game_data[:minage] || "?"}+\n\n"
 
-      # Description traduite
       markdown += "---\n\n"
       markdown += (description_fr || game_data[:description] || "")
       markdown += "\n\n---\n\n"
 
-      # Catégories et mécanismes
       if game_data[:categories].present? && game_data[:categories].any?
         markdown += "**Catégories :** #{game_data[:categories].join(", ")}\n\n"
       end
@@ -81,7 +73,6 @@ module DiscourseGameSheet
         markdown += "**Mécanismes :** #{game_data[:mechanics].join(", ")}\n\n"
       end
 
-      # Images sélectionnées
       if params[:selected_images].present? && params[:selected_images].any?
         markdown += "## 🖼️ Galerie d'images\n\n"
         params[:selected_images].each do |img_url|
@@ -90,7 +81,6 @@ module DiscourseGameSheet
         markdown += "\n"
       end
 
-      # Vidéos sélectionnées
       if params[:selected_videos].present? && params[:selected_videos].any?
         markdown += "## 🎬 Vidéos\n\n"
         params[:selected_videos].each do |video_id|
@@ -99,7 +89,6 @@ module DiscourseGameSheet
         markdown += "\n"
       end
 
-      # Footer BGG
       markdown += "---\n\n"
       markdown += "[📖 Voir la fiche complète sur BoardGameGeek](https://boardgamegeek.com/boardgame/#{params[:game_id]})"
 
