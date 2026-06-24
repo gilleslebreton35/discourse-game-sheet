@@ -186,34 +186,7 @@ export default class AdminGameSheet extends Component {
         </div>
       {{/if}}
 
-      {{#if this.results.length}}
-        <table class="table">
-          <thead>
-            <tr>
-              <th>{{i18n "game_sheet.name"}}</th>
-              <th>{{i18n "game_sheet.year"}}</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {{#each this.results as |game|}}
-              <tr>
-                <td>{{game.name}}</td>
-                <td>{{game.yearpublished}}</td>
-                <td>
-                  <DButton
-                    @label="game_sheet.view_details"
-                    @action={{fn this.loadGameDetails game.id}}
-                    class="btn-primary"
-                  />
-                </td>
-              </tr>
-            {{/each}}
-          </tbody>
-        </table>
-      {{else if this.loading}}
-        <p>{{i18n "loading"}}</p>
-      {{/if}}
+{{#if this.results.length}}
 
       {{#if this.selectedGame}}
         <div style="margin-top: 1em; padding: 1em; border: 1px solid var(--primary-low); border-radius: 8px;">
