@@ -84,11 +84,11 @@ module ::DiscourseGameSheet
         mechanics << value if type == "boardgamemechanic" && value.present?
       end
 
-      # Collecter toutes les images disponibles (image principale uniquement)
+      # Collecter les images
       images = []
       images << image if image.present?
 
-      # Récupérer les images des versions
+      # Récupérer les images des versions (BGG v2)
       begin
         versions_uri = URI("#{BASE_URL}/thing?id=#{CGI.escape(id)}&versions=1")
         versions_response = get(versions_uri)
@@ -104,24 +104,37 @@ module ::DiscourseGameSheet
         Rails.logger.warn "[GameSheet] Erreur récupération images versions BGG: #{e.message}"
       end
 
-      # Récupérer toutes les images de la galerie via un appel séparé à "thing" avec toutes les infos
-      begin
-        # L'API "thing" peut renvoyer plusieurs images via le champ "image" différent pour chaque version/accessoire
-        all_ids_uri = URI("#{BASE_URL}/thing?id=#{CGI.escape(id)}&type=boardgame,boardgameaccessory,boardgameexpansion")
-        all_ids_response = get(all_ids_uri)
-        all_ids_doc = REXML::Document.new(all_ids_response.body)
-
-        all_ids_doc.elements.each("items/item") do |sub_item|
-          sub_item.elements.each("image") do |img|
-            url = img.text.to_s.strip
-            images << url if url.present? && !images.include?(url)
+      # Si moins de 5 images, essayer de récupérer les images des expansions et accessoires
+      if images.length < 5
+        begin
+          # Récupérer les IDs des expansions et accessoires
+          expansions_ids = []
+          item.elements.each("link") do |link|
+            type = link.attributes["type"]
+            if ["boardgameexpansion", "boardgameaccessory"].include?(type)
+              expansions_ids << link.attributes["id"]
+            end
           end
+
+          # Récupérer leurs infos par lots de 10
+          expansions_ids.each_slice(10) do |batch_ids|
+            batch_uri = URI("#{BASE_URL}/thing?id=#{batch_ids.join(',')}")
+            batch_response = get(batch_uri)
+            batch_doc = REXML::Document.new(batch_response.body)
+
+            batch_doc.elements.each("items/item") do |sub_item|
+              sub_item.elements.each("image") do |img|
+                url = img.text.to_s.strip
+                images << url if url.present? && !images.include?(url)
+              end
+            end
+          end
+        rescue StandardError => e
+          Rails.logger.warn "[GameSheet] Erreur récupération images expansions: #{e.message}"
         end
-      rescue StandardError => e
-        Rails.logger.warn "[GameSheet] Erreur récupération images supplémentaires BGG: #{e.message}"
       end
 
-      # Récupérer les vidéos
+      # Récupérer les vidéos (sans filtre de langue pour le test)
       videos = []
       begin
         videos_uri = URI("#{BASE_URL}/thing?id=#{CGI.escape(id)}&videos=1")
@@ -130,9 +143,6 @@ module ::DiscourseGameSheet
 
         videos_doc.elements.each("items/item/videos/video") do |v|
           language = (v.attributes["language"] || "").to_s.downcase
-          
-          # Ne garder que les vidéos françaises
-          next unless ["fr", "french", "fr-fr"].include?(language)
 
           video = {
             id: v.attributes["id"],
