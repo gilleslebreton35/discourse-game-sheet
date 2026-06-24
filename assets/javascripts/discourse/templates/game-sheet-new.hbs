@@ -28,7 +28,12 @@
       {{#each this.results as |game|}}
         <li>
           <button type="button" class="btn" {{on "click" (fn this.chooseGame game)}}>
-            {{game.name}} {{#if game.year}}({{game.year}}){{/if}}
+            {{! Affichage de l'image (thumbnail) si elle existe }}
+            {{#if game.thumbnail}}
+              <img src="{{game.thumbnail}}" alt="" style="width: 40px; height: 40px; object-fit: cover; margin-right: 10px; vertical-align: middle;">
+            {{/if}}
+            
+            {{game.name}} {{#if game.yearpublished}}({{game.yearpublished}}){{/if}}
           </button>
         </li>
       {{/each}}
@@ -46,14 +51,14 @@
       </p>
     {{/if}}
 
-    <p><strong>Année :</strong> {{this.selectedGame.year}}</p>
-    <p><strong>Joueurs :</strong> {{this.selectedGame.min_players}} à {{this.selectedGame.max_players}}</p>
-    <p><strong>Durée :</strong> {{this.selectedGame.playing_time}} min</p>
-    <p><strong>Âge :</strong> {{this.selectedGame.min_age}}+</p>
+    <p><strong>Année :</strong> {{this.selectedGame.yearpublished}}</p>
+    <p><strong>Joueurs :</strong> {{this.selectedGame.minplayers}} à {{this.selectedGame.maxplayers}}</p>
+    <p><strong>Durée :</strong> {{this.selectedGame.playingtime}} min</p>
+    <p><strong>Âge :</strong> {{this.selectedGame.minage}}+</p>
 
-    <h3>Description FR</h3>
+    <h3>Description</h3>
     <div class="game-sheet-description">
-      {{this.selectedGame.description_fr}}
+      {{this.selectedGame.description}}
     </div>
 
     <h3>Catégorie de destination</h3>
