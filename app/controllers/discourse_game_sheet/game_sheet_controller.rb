@@ -1,86 +1,71 @@
 # frozen_string_literal: true
 
-module ::DiscourseGameSheet
-  class GameSheetController < ::ApplicationController
-    requires_plugin DiscourseGameSheet::PLUGIN_NAME
+class GameSheetController < ::ApplicationController
+  before_action :ensure_admin # Sécurité d'accès au niveau du contrôleur
 
-    before_action :ensure_logged_in
-    before_action :ensure_enabled
+  # GET /game-sheet/details?id=123
+  def details
+    params.require(:id)
+    
+    # Logique d'interrogation de l'API BGG Thing v2
+    # Remplacer par l'appel à ton service d'infrastructure BGG existant
+    game_details = BggApiService.fetch_thing_details(params[:id])
+    
+    if game_details
+      render json: game_details # Rend le payload contenant id, name, description, rating, images, etc.
+    else
+      render_json_error "Impossible d'extraire les données depuis BoardGameGeek.", status: 422
+    end
+  end
 
-    # Recherche de jeux (accessible à tous les membres connectés)
-    def search
-      term = (params[:query] || params[:q]).to_s.strip
-      raise Discourse::InvalidParameters.new(:query) if term.blank?
+  # POST /game-sheet/create-topic
+  def create_topic
+    # Validation stricte des données entrantes (Strong Parameters)
+    clean_params = params.permit(:game_id, :category_id, selected_images: [])
+    
+    clean_params.require(:game_id)
+    clean_params.require(:category_id)
 
-      result = DiscourseGameSheet::BggClient.search(term)
-      render json: result
+    # Récupération des détails (idéalement mis en cache ou relus)
+    game = BggApiService.fetch_thing_details(clean_params[:game_id])
+    return render_json_error "Jeu introuvable.", status: 404 if game.blank?
+
+    # Construction du corps Markdown
+    raw_body = String.new
+    
+    # 1. Injection des illustrations sélectionnées en tête d'article
+    if clean_params[:selected_images].present?
+      raw_body << "<div class='bgg-topic-gallery'>\n\n"
+      clean_params[:selected_images].each do |img_url|
+        raw_body << "![Illustration]({#img_url})\n\n"
+      end
+      raw_body << "</div>\n\n"
     end
 
-    # Récupération des détails d'un jeu
-    def game
-      id = params.require(:id).to_s
-      result = DiscourseGameSheet::BggClient.game(id)
-      render json: result
-    end
+    # 2. Injection de la fiche technique
+    raw_body << "## {#game[:name]}\n\n"
+    raw_body << "* **Note BGG :** {#game[:rating]}/10\n"
+    raw_body << "* **Joueurs :** {#game[:min_players]} à {#game[:max_players]}\n"
+    raw_body << "* **Durée :** {#game[:playing_time]} minutes\n\n"
+    raw_body << "### Description\n\n"
+    
+    # Utilisation du helper Discourse pour nettoyer le HTML de BGG avant insertion
+    raw_body << Search.clean_html(game[:description])
 
-    # Création du sujet avec les choix de l'utilisateur
-    def create_topic
-      category_id = params.require(:category_id).to_i
-      category = Category.find_by(id: category_id)
-      raise Discourse::InvalidParameters.new(:category_id) if category.blank?
+    # 3. Appel à l'orchestrateur natif Discourse PostCreator
+    post_creator = PostCreator.new(
+      current_user,
+      title: "Fiche de jeu : {#game[:name]}",
+      raw: raw_body,
+      category: clean_params[:category_id],
+      skip_validations: true
+    )
+    post = post_creator.create
 
-      # Vérification de sécurité native : l'utilisateur a-t-il le droit de poster ici ?
-      guardian.ensure_can_create_topic!(category)
-
-      # Récupération des données brutes depuis BGG pour des raisons de sécurité (évite l'injection de markdown)
-      game_id = params.require(:game_id).to_s
-      game = DiscourseGameSheet::BggClient.game(game_id)
-      raise Discourse::InvalidParameters.new(:game_id) if game.blank?
-
-      # Traduction via DeepL (uniquement la description/champs textuels)
-      translated = translate_game(game)
-
-      # Récupération des listes filtrées par l'utilisateur depuis le front-end
-      selected_images = params[:selected_images] || []
-      selected_videos = params[:selected_videos] || []
-
-      # Création du sujet via le TopicBuilder en lui passant TOUTES les billes
-      result = DiscourseGameSheet::TopicBuilder.create!(
-        current_user: current_user,
-        game: game,
-        translated: translated,
-        category_id: category_id,
-        selected_images: selected_images,
-        selected_videos: selected_videos
-      )
-
-      render json: success_json.merge(
-        topic_id: result.topic.id,
-        topic_url: result.topic.relative_url
-      )
-    rescue => e
-      Rails.logger.warn("[discourse-game-sheet] create_topic error: #{e.class} #{e.message}")
-      render_json_error(e.message)
-    end
-
-    private
-
-    def ensure_enabled
-      raise Discourse::InvalidAccess.new unless SiteSetting.game_sheet_enabled
-    end
-
-    def translate_game(game)
-      api_key = SiteSetting.game_sheet_deepl_api_key.to_s.strip
-      return game if api_key.blank?
-
-      # Utilise le code de langue cible ou 'FR' par défaut
-      target_lang = SiteSetting.try(:game_sheet_target_locale) || "FR"
-
-      DiscourseGameSheet::DeeplClient.translate_game(
-        game,
-        api_key: api_key,
-        target_lang: target_lang
-      )
+    if post_creator.errors.present?
+      render_json_error post_creator.errors.full_messages.join(", "), status: 422
+    else
+      render json: { topic_url: post.topic.url }
     end
   end
 end
