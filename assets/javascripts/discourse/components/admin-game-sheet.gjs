@@ -189,16 +189,16 @@ export default class AdminGameSheet extends Component {
         <p>{{i18n "loading"}}</p>
       {{/if}}
 
-      {{#if this.selectedGame}}
-        <div style="margin-top: 1em; padding: 1em; border: 1px solid var(--primary-low); border-radius: 8px;">
-          <div style="display: flex; gap: 1em; flex-wrap: wrap;">
-            {{#if this.selectedGame.image}}
-              <div>
-                <img src={{this.selectedGame.image}} alt={{this.selectedGame.name}} width="200" style="border-radius: 4px;" />
-              </div>
-            {{/if}}
-            <div style="flex: 1; min-width: 200px;">
-              <h2>{{this.selectedGame.name}}</h2>
+    {{#if this.selectedGame}}
+  <div style="margin-top: 1em; padding: 1em; border: 1px solid var(--primary-low); border-radius: 8px;">
+    <div style="display: flex; gap: 1em; flex-wrap: wrap;">
+      {{#if this.selectedGame.image}}
+        <div style="flex-shrink: 0;">
+          <img src={{this.selectedGame.image}} alt={{this.selectedGame.name}} width="150" style="border-radius: 4px; object-fit: cover;" />
+        </div>
+      {{/if}}
+      <div style="flex: 1; min-width: 200px;">
+        <h2>{{this.selectedGame.name}}</h2>
               <p><strong>Note BGG :</strong> {{this.selectedGame.rating}}</p>
               <p><strong>Joueurs :</strong> {{this.selectedGame.minplayers}} - {{this.selectedGame.maxplayers}}</p>
               <p><strong>Durée :</strong> {{this.selectedGame.playingtime}} min</p>
