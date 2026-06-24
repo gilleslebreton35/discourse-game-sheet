@@ -19,11 +19,11 @@ after_initialize do
   require_relative "app/controllers/discourse_game_sheet/game_sheet_controller"
 
  # 2. Injection directe des routes en PRIORITÉ
-  Discourse::Application.routes.prepend do
+ Discourse::Application.routes.prepend do
   get "/admin/plugins/game-sheet" => "admin/plugins#index", constraints: StaffConstraint.new
   
   get "/game-sheet/search" => "discourse_game_sheet/game_sheet#search", constraints: StaffConstraint.new, defaults: { format: :json }
-  get "/game-sheet/details" => "discourse_game_sheet/game_sheet#game", constraints: StaffConstraint.new, defaults: { format: :json }
+  get "/game-sheet/game/:id" => "discourse_game_sheet/game_sheet#game", constraints: StaffConstraint.new, defaults: { format: :json }
   post "/game-sheet/create-topic" => "discourse_game_sheet/game_sheet#create_topic", constraints: StaffConstraint.new, defaults: { format: :json }
 end
 end
