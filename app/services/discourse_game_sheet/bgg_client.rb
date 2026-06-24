@@ -103,29 +103,31 @@ module ::DiscourseGameSheet
       rescue StandardError
       end
 
-    # Récupérer les vidéos
+# Récupérer les vidéos
 videos = []
 begin
-  # L'API v2 de BGG renvoie les vidéos via l'endpoint thing avec le paramètre videos=1
   videos_uri = URI("#{BASE_URL}/thing?id=#{CGI.escape(id)}&videos=1")
   videos_response = get(videos_uri)
   videos_doc = REXML::Document.new(videos_response.body)
 
-  # Les vidéos sont dans <items><item><videos>
   videos_doc.elements.each("items/item/videos/video") do |v|
+    language = v.attributes["language"].to_s.downcase
+    
+    # Ne garder que les vidéos en français
+    next unless language == "fr" || language == "french"
+    
     video = {
       id: v.attributes["id"],
       title: v.attributes["title"],
       author: v.attributes["author"],
       category: v.attributes["category"],
-      language: v.attributes["language"],
+      language: language,
       thumbnail: v.attributes["thumbnail"] || "https://img.youtube.com/vi/#{v.attributes['id']}/mqdefault.jpg",
       url: "https://www.youtube.com/watch?v=#{v.attributes['id']}"
     }
     videos << video
   end
 rescue StandardError => e
-  # Log l'erreur pour déboguer
   Rails.logger.warn "[GameSheet] Erreur récupération vidéos BGG: #{e.message}"
 end
 
