@@ -2,7 +2,6 @@
 
 module DiscourseGameSheet
   class GameSheetController < ::ApplicationController
-    requires_plugin DiscourseGameSheet::PLUGIN_NAME
     before_action :ensure_logged_in
 
     # GET /game-sheet/search?q=catan
@@ -12,7 +11,6 @@ module DiscourseGameSheet
       data = DiscourseGameSheet::BggClient.search(params[:q])
       render json: data
     end
-
     # GET /game-sheet/game/123
     def game
       id = params.require(:id)
