@@ -1,0 +1,12 @@
+en:
+  js:
+    game_sheet:
+      title: "Game Sheet"
+      search_label: "Search a board game"
+      search_placeholder: "Type a game name"
+      search_button: "Search"
+      create_topic: "Create topic"
+      creating: "Creating..."
+      no_results: "No results"
+      success: "Topic created successfully"
+      open_topic: "Open topic"

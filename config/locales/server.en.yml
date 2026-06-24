@@ -1,0 +1,7 @@
+en:
+  site_settings:
+    game_sheet_enabled: "Enable Game Sheet plugin"
+    game_sheet_allowed_category_id: "Category ID where generated topics will be created"
+    game_sheet_deepl_api_key: "DeepL API key"
+    game_sheet_bgg_token: "Optional BGG token"
+    game_sheet_target_locale: "Target locale for DeepL translation"

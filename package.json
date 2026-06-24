@@ -1,0 +1,7 @@
+{
+  "name": "discourse-game-sheet",
+  "version": "0.1.0",
+  "dependencies": {
+    "@ember/render-modifiers": "^2.0.0"
+  }
+}

@@ -1,1 +1,1 @@
-# discourse-game-sheet
+# discourse-search-bgg

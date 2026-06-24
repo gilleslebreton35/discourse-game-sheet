@@ -1,0 +1,24 @@
+/* Ajoute un nom plus spécifique à ton conteneur racine dans ton fichier GJS */
+.game-sheet-admin-container {
+    .game-sheet-search {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .game-sheet-results {
+        list-style: none;
+        padding: 0;
+
+        li {
+            margin: 0.25rem 0;
+        }
+    }
+
+    .game-sheet-description {
+        white-space: pre-wrap;
+        border: 1px solid var(--primary-low);
+        padding: 1rem;
+        border-radius: 8px;
+    }
+}
