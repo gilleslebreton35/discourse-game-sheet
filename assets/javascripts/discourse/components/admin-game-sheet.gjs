@@ -7,31 +7,25 @@ import { i18n } from "discourse-i18n";
 import { fn } from "@ember/helper";
 import { on } from "@ember/modifier";
 import DButton from "discourse/components/d-button";
-import { Input } from "@ember/component";
-
-// Fonctionnalités utilitaires pures (Évite l'usage de helpers globaux obsolètes)
-const isSelected = (selectedGame, currentId) => selectedGame?.id === currentId;
-const isImageChecked = (list, url) => list && list.includes(url);
-const computeThumbnailStyle = (list, url) => {
-  const checked = list && list.includes(url);
-  return `width: 76px; height: 76px; object-fit: cover; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; border: 3px solid ${checked ? "var(--tertiary)" : "var(--primary-low)"}; opacity: ${checked ? "1" : "0.7"};`;
-};
 
 export default class AdminGameSheet extends Component {
   @service siteSettings;
 
-  // États de la recherche globale
   @tracked query = "";
   @tracked results = [];
   @tracked loading = false;
   @tracked error = null;
   @tracked createdTopicUrl = null;
-  
-  // États d'isolation du panneau de détails (Étape 2)
+
   @tracked selectedGame = null;
   @tracked loadingDetails = false;
   @tracked selectedImages = [];
   @tracked creatingTopic = false;
+
+  @action
+  updateQuery(event) {
+    this.query = event.target.value;
+  }
 
   @action
   async searchGames() {
@@ -41,17 +35,17 @@ export default class AdminGameSheet extends Component {
     this.error = null;
     this.results = [];
     this.createdTopicUrl = null;
-    this.selectedGame = null; 
+    this.selectedGame = null;
 
     try {
       const response = await ajax(`/game-sheet/search?q=${encodeURIComponent(this.query)}`);
       this.results = response.results || [];
-      
+
       if (this.results.length === 0) {
         this.error = i18n("game_sheet.no_results") || "Aucun jeu trouvé.";
       }
     } catch (e) {
-      this.error = e.jqXHR?.responseJSON?.errors?.[0] || "Erreur lors de la communication avec le serveur backend.";
+      this.error = e.jqXHR?.responseJSON?.errors?.[0] || "Erreur de connexion.";
     } finally {
       this.loading = false;
     }
@@ -62,18 +56,18 @@ export default class AdminGameSheet extends Component {
     this.loadingDetails = true;
     this.error = null;
     this.selectedGame = null;
-    this.selectedImages = []; 
+    this.selectedImages = [];
 
     try {
-      const response = await ajax(`/game-sheet/details?id=${gameId}`);
+      const response = await ajax(`/game-sheet/game/${gameId}`);
       this.selectedGame = response;
-      
-      // Expérience Utilisateur : Pré-sélectionner automatiquement la couverture par défaut
+
+      // Pré-sélectionner la première image
       if (this.selectedGame?.images?.length > 0) {
         this.selectedImages = [this.selectedGame.images[0]];
       }
     } catch (e) {
-      this.error = "Erreur critique : Impossible de récupérer la fiche technique BGG de ce jeu.";
+      this.error = "Impossible de récupérer les détails du jeu.";
     } finally {
       this.loadingDetails = false;
     }
@@ -98,7 +92,7 @@ export default class AdminGameSheet extends Component {
 
     const payload = {
       game_id: this.selectedGame.id,
-      category_id: this.siteSettings.game_sheet_allowed_category_id || 1,
+      category_id: this.siteSettings.game_sheet_allowed_category_id,
       selected_images: this.selectedImages
     };
 
@@ -110,27 +104,27 @@ export default class AdminGameSheet extends Component {
 
       if (response?.topic_url) {
         this.createdTopicUrl = response.topic_url;
-        document.querySelector(".game-sheet-admin-viewport")?.scrollIntoView({ behavior: "smooth" });
       }
     } catch (e) {
-      this.error = e.jqXHR?.responseJSON?.errors?.[0] || "Erreur critique lors de la sérialisation du sujet.";
+      this.error = e.jqXHR?.responseJSON?.errors?.[0] || "Erreur lors de la création du sujet.";
     } finally {
       this.creatingTopic = false;
     }
   }
 
   <template>
-    <div class="game-sheet-admin-viewport admin-container">
+    <div class="admin-container">
       <h1>{{i18n "game_sheet.title"}}</h1>
 
-      <div class="game-sheet-search-block">
-        <label for="bgg-search-input">{{i18n "game_sheet.search_label"}}</label>
-        <div class="game-sheet-input-group">
-          <Input
-            @type="text"
-            @value={{this.query}}
-            id="bgg-search-input"
+      <div style="margin: 1em 0;">
+        <label>{{i18n "game_sheet.search_label"}}</label>
+        <div style="display: flex; gap: 0.5em; margin-top: 0.5em;">
+          <input
+            type="text"
+            value={{this.query}}
+            {{on "input" this.updateQuery}}
             placeholder={{i18n "game_sheet.search_placeholder"}}
+            class="input-xxlarge"
           />
           <DButton
             @label="game_sheet.search_button"
@@ -142,13 +136,13 @@ export default class AdminGameSheet extends Component {
       </div>
 
       {{#if this.error}}
-        <div class="alert alert-error animate-fade-in">
+        <div class="alert alert-error" style="margin-bottom: 1em;">
           {{this.error}}
         </div>
       {{/if}}
 
       {{#if this.createdTopicUrl}}
-        <div class="alert alert-success animate-fade-in">
+        <div class="alert alert-success" style="margin-bottom: 1em;">
           {{i18n "game_sheet.success"}}
           <a href={{this.createdTopicUrl}} target="_blank" rel="noopener noreferrer">
             {{i18n "game_sheet.open_topic"}}
@@ -156,94 +150,89 @@ export default class AdminGameSheet extends Component {
         </div>
       {{/if}}
 
-      <div class="game-sheet-workspace">
-        
-        {{#if this.results.length}}
-          <div class="game-sheet-results-pane">
-            <table class="table game-sheet-data-table">
-              <thead>
-                <tr>
-                  <th>Nom du Jeu</th>
-                  <th>Année</th>
-                  <th class="actions-col"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {{#each this.results as |game|}}
-                  <tr class={{if (isSelected this.selectedGame game.id) "is-active-row"}}>
-                    <td class="game-title-cell">{{game.name.normalized}}</td>
-                    <td><span class="date-badge">{{game.yearpublished.normalized}}</span></td>
-                    <td class="actions-col">
-                      <DButton
-                        @icon="eye"
-                        @label="game_sheet.view_details"
-                        @action={{fn this.loadGameDetails game.id}}
-                        class="btn-default btn-small"
-                      />
-                    </td>
-                  </tr>
-                {{/each}}
-              </tbody>
-            </table>
-          </div>
-        {{else if this.loading}}
-          <div class="game-sheet-loading-state">
-            <div class="spinner"></div>
-            <p>Interrogation de BoardGameGeek en cours...</p>
-          </div>
-        {{/if}}
+      {{#if this.results.length}}
+        <table class="table">
+          <thead>
+            <tr>
+              <th>{{i18n "game_sheet.name"}}</th>
+              <th>{{i18n "game_sheet.year"}}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#each this.results as |game|}}
+              <tr>
+                <td>{{game.name}}</td>
+                <td>{{game.yearpublished}}</td>
+                <td>
+                  <DButton
+                    @label="game_sheet.view_details"
+                    @action={{fn this.loadGameDetails game.id}}
+                    class="btn-primary"
+                  />
+                </td>
+              </tr>
+            {{/each}}
+          </tbody>
+        </table>
+      {{else if this.loading}}
+        <p>{{i18n "loading"}}</p>
+      {{/if}}
 
-        {{#if this.selectedGame}}
-          <div class="game-sheet-details-pane">
-            <h2>{{this.selectedGame.name}}</h2>
-            
-            <div class="game-sheet-metadata-strip">
-              <span class="meta-item"><i class="fa fa-star"></i> <strong>{{this.selectedGame.rating}}</strong> / 10</span>
-              <span class="meta-item"><i class="fa fa-users"></i> <strong>{{this.selectedGame.min_players}} - {{this.selectedGame.max_players}}</strong> joueurs</span>
-              <span class="meta-item"><i class="fa fa-clock"></i> <strong>{{this.selectedGame.playing_time}}</strong> min</span>
-            </div>
-
-            <div class="game-sheet-description-box">
-              {{{this.selectedGame.description}}}
-            </div>
-
-            <div class="game-sheet-gallery-section">
-              <h3>Sélection des visuels à inclure</h3>
-              {{#if this.selectedGame.images.length}}
-                <div class="game-sheet-grid-gallery">
-                  {{#each this.selectedGame.images as |imgUrl|}}
-                    <label class="game-sheet-gallery-item">
-                      <img src={{imgUrl}} alt="BGG Resource" style={{computeThumbnailStyle this.selectedImages imgUrl}} />
-                      <input 
-                        type="checkbox" 
-                        class="game-sheet-hidden-checkbox"
-                        checked={{isImageChecked this.selectedImages imgUrl}}
-                        {{on "change" (fn this.toggleImageSelection imgUrl)}} 
-                      />
-                    </label>
-                  {{/each}}
-                </div>
-              {{else}}
-                <p class="no-data-msg">Aucun visuel d'illustration trouvé pour ce titre.</p>
+      {{#if this.selectedGame}}
+        <div style="margin-top: 1em; padding: 1em; border: 1px solid var(--primary-low); border-radius: 8px;">
+          <div style="display: flex; gap: 1em; flex-wrap: wrap;">
+            {{#if this.selectedGame.image}}
+              <div>
+                <img src={{this.selectedGame.image}} alt={{this.selectedGame.name}} width="200" style="border-radius: 4px;" />
+              </div>
+            {{/if}}
+            <div style="flex: 1; min-width: 200px;">
+              <h2>{{this.selectedGame.name}}</h2>
+              <p><strong>Note BGG :</strong> {{this.selectedGame.rating}}</p>
+              <p><strong>Joueurs :</strong> {{this.selectedGame.minplayers}} - {{this.selectedGame.maxplayers}}</p>
+              <p><strong>Durée :</strong> {{this.selectedGame.playingtime}} min</p>
+              <p><strong>Âge :</strong> {{this.selectedGame.minage}}+</p>
+              {{#if this.selectedGame.categories}}
+                <p><strong>Catégories :</strong> {{this.selectedGame.categories}}</p>
               {{/if}}
+              {{#if this.selectedGame.mechanics}}
+                <p><strong>Mécanismes :</strong> {{this.selectedGame.mechanics}}</p>
+              {{/if}}
+              <p><strong>Description :</strong></p>
+              <p>{{this.selectedGame.description}}</p>
             </div>
+          </div>
 
+          {{#if this.selectedGame.images.length}}
+            <h3 style="margin-top: 1em;">{{i18n "game_sheet.available_images"}}</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5em;">
+              {{#each this.selectedGame.images as |imgUrl|}}
+                <label style="border: 3px solid {{if this.selectedImages.includes imgUrl 'var(--tertiary)' 'transparent'}}; cursor: pointer; padding: 2px; border-radius: 4px;">
+                  <input
+                    type="checkbox"
+                    checked={{this.selectedImages.includes imgUrl}}
+                    {{on "change" (fn this.toggleImageSelection imgUrl)}}
+                    style="display: none;"
+                  />
+                  <img src={{imgUrl}} width="150" style="border-radius: 2px;" />
+                </label>
+              {{/each}}
+            </div>
+          {{/if}}
+
+          <div style="margin-top: 1em;">
             <DButton
-              @icon="plus"
-              @label="game_sheet.create_topic_button"
+              @label="game_sheet.create_topic"
               @action={{this.executeTopicCreation}}
               @disabled={{this.creatingTopic}}
-              class="btn-primary game-sheet-submit-btn"
+              class="btn-primary"
             />
           </div>
-        {{else if this.loadingDetails}}
-          <div class="game-sheet-details-placeholder-loading">
-            <div class="spinner"></div>
-            <p>Hydratation de la fiche technique depuis BGG...</p>
-          </div>
-        {{/if}}
-
-      </div>
+        </div>
+      {{else if this.loadingDetails}}
+        <p>{{i18n "loading"}}</p>
+      {{/if}}
     </div>
   </template>
 }
