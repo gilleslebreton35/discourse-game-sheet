@@ -87,6 +87,28 @@ module ::DiscourseGameSheet
         mechanics << value if type == "boardgamemechanic" && value.present?
       end
 
+      # Collecter toutes les images disponibles
+      images = []
+      images << image if image.present?
+
+      # Essayer de récupérer des images supplémentaires depuis les versions
+      begin
+        versions_uri = URI("#{BASE_URL}/thing?id=#{CGI.escape(id)}&type=boardgame&versions=1")
+        versions_response = get(versions_uri)
+        versions_doc = REXML::Document.new(versions_response.body)
+
+        versions_doc.elements.each("items/item") do |version_item|
+          version_item.elements.each("image") do |img|
+            url = img.text.to_s.strip
+            images << url if url.present? && !images.include?(url)
+          end
+        end
+      rescue StandardError
+        # On ignore silencieusement, on a au moins l'image principale
+      end
+
+      rating = item.elements["statistics/ratings/average"]&.attributes&.fetch("value", nil)
+
       {
         id: id,
         name: primary_name || names.first,
@@ -99,8 +121,10 @@ module ::DiscourseGameSheet
         minage: minage,
         image: image,
         thumbnail: thumbnail,
+        images: images.uniq,
         categories: categories.uniq,
         mechanics: mechanics.uniq,
+        rating: rating,
         bgg_url: "https://boardgamegeek.com/boardgame/#{id}"
       }
     end
@@ -108,11 +132,13 @@ module ::DiscourseGameSheet
     def self.get(uri)
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = true
+      http.read_timeout = 10
+      http.open_timeout = 5
 
       request = Net::HTTP::Get.new(uri)
       token = SiteSetting.game_sheet_bgg_token.to_s.strip
-
       request["Authorization"] = "Bearer #{token}" if token.present?
+      request["User-Agent"] = "DiscourseGameSheet/1.0"
 
       response = http.request(request)
 
