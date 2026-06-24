@@ -10,7 +10,6 @@ module ::DiscourseGameSheet
     BASE_URL = "https://boardgamegeek.com/xmlapi2"
 
     def self.search(query)
-      # 1. On fait la recherche initiale
       uri = URI("#{BASE_URL}/search?query=#{CGI.escape(query)}&type=boardgame")
       response = get(uri)
       doc = REXML::Document.new(response.body)
@@ -22,7 +21,6 @@ module ::DiscourseGameSheet
 
       return { results: [] } if ids.empty?
 
-      # 2. On prend les 10 premiers résultats et on demande leurs détails (images incluses)
       top_ids = ids.first(10).join(",")
       thing_uri = URI("#{BASE_URL}/thing?id=#{top_ids}")
       thing_response = get(thing_uri)
@@ -40,8 +38,7 @@ module ::DiscourseGameSheet
 
         items << {
           id: item.attributes["id"],
-          # CGI.unescapeHTML permet de transformer les &#039; en de vraies apostrophes !
-          name: CGI.unescapeHTML(primary_name.to_s), 
+          name: CGI.unescapeHTML(primary_name.to_s),
           yearpublished: year,
           thumbnail: thumbnail
         }
@@ -91,7 +88,7 @@ module ::DiscourseGameSheet
       images = []
       images << image if image.present?
 
-      # Essayer de récupérer des images supplémentaires depuis les versions
+      # Récupérer les images des versions
       begin
         versions_uri = URI("#{BASE_URL}/thing?id=#{CGI.escape(id)}&type=boardgame&versions=1")
         versions_response = get(versions_uri)
@@ -104,7 +101,28 @@ module ::DiscourseGameSheet
           end
         end
       rescue StandardError
-        # On ignore silencieusement, on a au moins l'image principale
+      end
+
+      # Récupérer les vidéos
+      videos = []
+      begin
+        videos_uri = URI("#{BASE_URL}/thing?id=#{CGI.escape(id)}&videos=1")
+        videos_response = get(videos_uri)
+        videos_doc = REXML::Document.new(videos_response.body)
+
+        videos_doc.elements.each("items/item/video") do |v|
+          video = {
+            id: v.attributes["id"],
+            title: v.attributes["title"],
+            author: v.attributes["author"],
+            category: v.attributes["category"],
+            language: v.attributes["language"],
+            thumbnail: "https://img.youtube.com/vi/#{v.attributes['id']}/mqdefault.jpg",
+            url: "https://www.youtube.com/watch?v=#{v.attributes['id']}"
+          }
+          videos << video
+        end
+      rescue StandardError
       end
 
       rating = item.elements["statistics/ratings/average"]&.attributes&.fetch("value", nil)
@@ -125,6 +143,7 @@ module ::DiscourseGameSheet
         categories: categories.uniq,
         mechanics: mechanics.uniq,
         rating: rating,
+        videos: videos,
         bgg_url: "https://boardgamegeek.com/boardgame/#{id}"
       }
     end
