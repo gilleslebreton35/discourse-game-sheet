@@ -10,24 +10,44 @@ module ::DiscourseGameSheet
     BASE_URL = "https://boardgamegeek.com/xmlapi2"
 
     def self.search(query)
+      # 1. On fait la recherche initiale
       uri = URI("#{BASE_URL}/search?query=#{CGI.escape(query)}&type=boardgame")
       response = get(uri)
-
       doc = REXML::Document.new(response.body)
-      items = []
 
+      ids = []
       doc.elements.each("items/item") do |item|
-        name = item.elements["name"]&.attributes&.fetch("value", nil)
+        ids << item.attributes["id"]
+      end
+
+      return { results: [] } if ids.empty?
+
+      # 2. On prend les 10 premiers résultats et on demande leurs détails (images incluses)
+      top_ids = ids.first(10).join(",")
+      thing_uri = URI("#{BASE_URL}/thing?id=#{top_ids}")
+      thing_response = get(thing_uri)
+      thing_doc = REXML::Document.new(thing_response.body)
+
+      items = []
+      thing_doc.elements.each("items/item") do |item|
+        primary_name = nil
+        item.elements.each("name") do |n|
+          primary_name = n.attributes["value"] if n.attributes["type"] == "primary"
+        end
+
         year = item.elements["yearpublished"]&.attributes&.fetch("value", nil)
+        thumbnail = item.elements["thumbnail"]&.text.to_s
 
         items << {
           id: item.attributes["id"],
-          name: name,
-          yearpublished: year
+          # CGI.unescapeHTML permet de transformer les &#039; en de vraies apostrophes !
+          name: CGI.unescapeHTML(primary_name.to_s), 
+          yearpublished: year,
+          thumbnail: thumbnail
         }
       end
 
-      { results: items.first(10) }
+      { results: items }
     end
 
     def self.game(id)
