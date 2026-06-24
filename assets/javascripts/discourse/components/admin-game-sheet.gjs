@@ -53,29 +53,35 @@ export default class AdminGameSheet extends Component {
   }
 
   @action
-  async loadGameDetails(gameId) {
-    this.loadingDetails = true;
-    this.error = null;
-    this.selectedGame = null;
-    this.selectedImages = [];
-    this.selectedVideos = [];
+  @action
+async loadGameDetails(gameId) {
+  this.loadingDetails = true;
+  this.error = null;
+  this.selectedGame = null;
+  this.selectedImages = [];
+  this.selectedVideos = [];
 
-    try {
-      const response = await ajax(`/game-sheet/game/${gameId}`);
-      this.selectedGame = response;
+  try {
+    const response = await ajax(`/game-sheet/game/${gameId}`);
+    this.selectedGame = response;
+    
+    // Log pour déboguer
+    console.log("Game details:", response);
+    console.log("Images:", response?.images);
+    console.log("Videos:", response?.videos);
 
-      if (this.selectedGame?.images?.length > 0) {
-        this.selectedImages = [this.selectedGame.images[0]];
-      }
-      if (this.selectedGame?.videos?.length > 0) {
-        this.selectedVideos = [this.selectedGame.videos[0].id];
-      }
-    } catch (e) {
-      this.error = "Impossible de récupérer les détails du jeu.";
-    } finally {
-      this.loadingDetails = false;
+    if (this.selectedGame?.images?.length > 0) {
+      this.selectedImages = [this.selectedGame.images[0]];
     }
+    if (this.selectedGame?.videos?.length > 0) {
+      this.selectedVideos = [this.selectedGame.videos[0].id];
+    }
+  } catch (e) {
+    this.error = "Impossible de récupérer les détails du jeu.";
+  } finally {
+    this.loadingDetails = false;
   }
+}
 
   @action
   toggleImageSelection(imageUrl) {
