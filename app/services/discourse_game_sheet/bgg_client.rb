@@ -103,27 +103,31 @@ module ::DiscourseGameSheet
       rescue StandardError
       end
 
-      # Récupérer les vidéos
-      videos = []
-      begin
-        videos_uri = URI("#{BASE_URL}/thing?id=#{CGI.escape(id)}&videos=1")
-        videos_response = get(videos_uri)
-        videos_doc = REXML::Document.new(videos_response.body)
+    # Récupérer les vidéos
+videos = []
+begin
+  # L'API v2 de BGG renvoie les vidéos via l'endpoint thing avec le paramètre videos=1
+  videos_uri = URI("#{BASE_URL}/thing?id=#{CGI.escape(id)}&videos=1")
+  videos_response = get(videos_uri)
+  videos_doc = REXML::Document.new(videos_response.body)
 
-        videos_doc.elements.each("items/item/video") do |v|
-          video = {
-            id: v.attributes["id"],
-            title: v.attributes["title"],
-            author: v.attributes["author"],
-            category: v.attributes["category"],
-            language: v.attributes["language"],
-            thumbnail: "https://img.youtube.com/vi/#{v.attributes['id']}/mqdefault.jpg",
-            url: "https://www.youtube.com/watch?v=#{v.attributes['id']}"
-          }
-          videos << video
-        end
-      rescue StandardError
-      end
+  # Les vidéos sont dans <items><item><videos>
+  videos_doc.elements.each("items/item/videos/video") do |v|
+    video = {
+      id: v.attributes["id"],
+      title: v.attributes["title"],
+      author: v.attributes["author"],
+      category: v.attributes["category"],
+      language: v.attributes["language"],
+      thumbnail: v.attributes["thumbnail"] || "https://img.youtube.com/vi/#{v.attributes['id']}/mqdefault.jpg",
+      url: "https://www.youtube.com/watch?v=#{v.attributes['id']}"
+    }
+    videos << video
+  end
+rescue StandardError => e
+  # Log l'erreur pour déboguer
+  Rails.logger.warn "[GameSheet] Erreur récupération vidéos BGG: #{e.message}"
+end
 
       rating = item.elements["statistics/ratings/average"]&.attributes&.fetch("value", nil)
 
