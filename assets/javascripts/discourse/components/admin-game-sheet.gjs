@@ -83,6 +83,16 @@ export default class AdminGameSheet extends Component {
   }
 
   @action
+  isImageSelected(imgUrl) {
+    return this.selectedImages.includes(imgUrl);
+  }
+
+  @action
+  imageBorderStyle(imgUrl) {
+    return this.selectedImages.includes(imgUrl) ? 'var(--tertiary)' : 'transparent';
+  }
+
+  @action
   async executeTopicCreation() {
     if (!this.selectedGame) return;
 
@@ -208,10 +218,10 @@ export default class AdminGameSheet extends Component {
             <h3 style="margin-top: 1em;">{{i18n "game_sheet.available_images"}}</h3>
             <div style="display: flex; flex-wrap: wrap; gap: 0.5em;">
               {{#each this.selectedGame.images as |imgUrl|}}
-                <label style="border: 3px solid {{if this.selectedImages.includes imgUrl 'var(--tertiary)' 'transparent'}}; cursor: pointer; padding: 2px; border-radius: 4px;">
+                <label style="border: 3px solid {{this.imageBorderStyle imgUrl}}; cursor: pointer; padding: 2px; border-radius: 4px;">
                   <input
                     type="checkbox"
-                    checked={{this.selectedImages.includes imgUrl}}
+                    checked={{this.isImageSelected imgUrl}}
                     {{on "change" (fn this.toggleImageSelection imgUrl)}}
                     style="display: none;"
                   />
