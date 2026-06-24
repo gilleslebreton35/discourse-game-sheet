@@ -142,20 +142,20 @@ export default class AdminGameSheet extends Component {
 
   <template>
     <div class="admin-container">
-      <h1>{{i18n "game_sheet.title"}}</h1>
+      <h1>Créer une fiche de jeu BGG</h1>
 
       <div style="margin: 1em 0;">
-        <label>{{i18n "game_sheet.search_label"}}</label>
+        <label>Rechercher un jeu :</label>
         <div style="display: flex; gap: 0.5em; margin-top: 0.5em;">
           <input
             type="text"
             value={{this.query}}
             {{on "input" this.updateQuery}}
-            placeholder={{i18n "game_sheet.search_placeholder"}}
+            placeholder="Nom du jeu (ex: Catan, 7 Wonders...)"
             class="input-xxlarge"
           />
           <DButton
-            @label="game_sheet.search_button"
+            @label="Rechercher"
             @action={{this.searchGames}}
             @disabled={{this.loading}}
             class="btn-primary"
@@ -171,9 +171,9 @@ export default class AdminGameSheet extends Component {
 
       {{#if this.createdTopicUrl}}
         <div class="alert alert-success" style="margin-bottom: 1em;">
-          {{i18n "game_sheet.success"}}
+          ✅ Fiche créée avec succès !
           <a href={{this.createdTopicUrl}} target="_blank" rel="noopener noreferrer">
-            {{i18n "game_sheet.open_topic"}}
+            Voir la fiche
           </a>
         </div>
       {{/if}}
@@ -183,8 +183,8 @@ export default class AdminGameSheet extends Component {
           <thead>
             <tr>
               <th></th>
-              <th>{{i18n "game_sheet.name"}}</th>
-              <th>{{i18n "game_sheet.year"}}</th>
+              <th>Nom</th>
+              <th>Année</th>
               <th></th>
             </tr>
           </thead>
@@ -200,7 +200,7 @@ export default class AdminGameSheet extends Component {
                 <td>{{game.yearpublished}}</td>
                 <td>
                   <DButton
-                    @label="game_sheet.view_details"
+                    @label="Sélectionner"
                     @action={{fn this.loadGameDetails game.id}}
                     class="btn-primary"
                   />
@@ -210,7 +210,7 @@ export default class AdminGameSheet extends Component {
           </tbody>
         </table>
       {{else if this.loading}}
-        <p>{{i18n "loading"}}</p>
+        <p>Recherche en cours...</p>
       {{/if}}
 
       {{#if this.selectedGame}}
@@ -239,7 +239,8 @@ export default class AdminGameSheet extends Component {
           </div>
 
           {{#if this.selectedGame.images.length}}
-            <h3 style="margin-top: 1em;">{{i18n "game_sheet.available_images"}}</h3>
+            <h3 style="margin-top: 1em;">Images disponibles</h3>
+            <p style="font-size: 0.9em; color: var(--primary-medium);">Cliquez pour sélectionner/déselectionner</p>
             <div style="display: flex; flex-wrap: wrap; gap: 0.5em;">
               {{#each this.selectedGame.images as |imgUrl|}}
                 <div
@@ -255,6 +256,7 @@ export default class AdminGameSheet extends Component {
 
           {{#if this.selectedGame.videos.length}}
             <h3 style="margin-top: 1em;">Vidéos disponibles</h3>
+            <p style="font-size: 0.9em; color: var(--primary-medium);">Cliquez pour sélectionner/déselectionner</p>
             <div style="display: flex; flex-wrap: wrap; gap: 0.5em;">
               {{#each this.selectedGame.videos as |video|}}
                 <div
@@ -274,7 +276,7 @@ export default class AdminGameSheet extends Component {
 
           <div style="margin-top: 1em;">
             <DButton
-              @label="game_sheet.create_topic"
+              @label="Créer la fiche"
               @action={{this.executeTopicCreation}}
               @disabled={{this.creatingTopic}}
               class="btn-primary"
@@ -282,7 +284,7 @@ export default class AdminGameSheet extends Component {
           </div>
         </div>
       {{else if this.loadingDetails}}
-        <p>{{i18n "loading"}}</p>
+        <p>Chargement des détails...</p>
       {{/if}}
     </div>
   </template>
