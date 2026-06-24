@@ -64,11 +64,9 @@ export default class AdminGameSheet extends Component {
       const response = await ajax(`/game-sheet/game/${gameId}`);
       this.selectedGame = response;
 
-      // Pré-sélectionner la première image
       if (this.selectedGame?.images?.length > 0) {
         this.selectedImages = [this.selectedGame.images[0]];
       }
-      // Pré-sélectionner la première vidéo
       if (this.selectedGame?.videos?.length > 0) {
         this.selectedVideos = [this.selectedGame.videos[0].id];
       }
@@ -186,7 +184,40 @@ export default class AdminGameSheet extends Component {
         </div>
       {{/if}}
 
-{{#if this.results.length}}
+      {{#if this.results.length}}
+        <table class="table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>{{i18n "game_sheet.name"}}</th>
+              <th>{{i18n "game_sheet.year"}}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#each this.results as |game|}}
+              <tr>
+                <td>
+                  {{#if game.thumbnail}}
+                    <img src={{game.thumbnail}} alt={{game.name}} width="50" style="border-radius: 4px;" />
+                  {{/if}}
+                </td>
+                <td>{{game.name}}</td>
+                <td>{{game.yearpublished}}</td>
+                <td>
+                  <DButton
+                    @label="game_sheet.view_details"
+                    @action={{fn this.loadGameDetails game.id}}
+                    class="btn-primary"
+                  />
+                </td>
+              </tr>
+            {{/each}}
+          </tbody>
+        </table>
+      {{else if this.loading}}
+        <p>{{i18n "loading"}}</p>
+      {{/if}}
 
       {{#if this.selectedGame}}
         <div style="margin-top: 1em; padding: 1em; border: 1px solid var(--primary-low); border-radius: 8px;">
@@ -231,7 +262,7 @@ export default class AdminGameSheet extends Component {
           {{/if}}
 
           {{#if this.selectedGame.videos.length}}
-            <h3 style="margin-top: 1em;">{{i18n "game_sheet.available_videos"}}</h3>
+            <h3 style="margin-top: 1em;">Vidéos disponibles</h3>
             <div style="display: flex; flex-wrap: wrap; gap: 0.5em;">
               {{#each this.selectedGame.videos as |video|}}
                 <label style="border: 3px solid {{this.videoBorderStyle video.id}}; cursor: pointer; padding: 2px; border-radius: 4px; width: 230px;">
