@@ -11,15 +11,13 @@ module DiscourseGameSheet
       data = DiscourseGameSheet::BggClient.search(params[:q])
       render json: data
     end
-    # GET /game-sheet/game/123
+
+    # GET /game-sheet/game/:id
     def game
       id = params.require(:id)
 
       begin
         game_details = DiscourseGameSheet::BggClient.game(id)
-
-        # Ajouter les images supplémentaires
-        game_details[:images] = fetch_additional_images(game_details)
 
         # Traduire si DeepL est configuré
         api_key = SiteSetting.game_sheet_deepl_api_key.to_s.strip
@@ -57,13 +55,22 @@ module DiscourseGameSheet
       # 1. Injection des illustrations sélectionnées
       if clean_params[:selected_images].present?
         raw_body << "<div class='bgg-topic-gallery'>\n\n"
-        clean_params[:selected_images].each do |img_url|
+        clean_params[:selected_images].uniq.each do |img_url|
           raw_body << "![Illustration](#{img_url})\n\n"
         end
         raw_body << "</div>\n\n"
       end
 
-      # 2. Traduction si DeepL configuré
+      # 2. Injection des vidéos sélectionnées
+      if clean_params[:selected_videos].present?
+        raw_body << "<div class='bgg-topic-videos'>\n\n"
+        clean_params[:selected_videos].uniq.each do |video_id|
+          raw_body << "https://www.youtube.com/watch?v=#{video_id}\n\n"
+        end
+        raw_body << "</div>\n\n"
+      end
+
+      # 3. Traduction si DeepL configuré
       api_key = SiteSetting.game_sheet_deepl_api_key.to_s.strip
       if api_key.present?
         target_lang = SiteSetting.try(:game_sheet_target_locale) || "FR"
@@ -74,7 +81,7 @@ module DiscourseGameSheet
         )
       end
 
-      # 3. Injection de la fiche technique
+      # 4. Injection de la fiche technique
       raw_body << "## #{game[:name]}\n\n"
       raw_body << "* **Année :** #{game[:yearpublished]}\n"
       raw_body << "* **Joueurs :** #{game[:minplayers]} à #{game[:maxplayers]}\n"
@@ -91,7 +98,7 @@ module DiscourseGameSheet
       raw_body << "\n### Description\n\n"
       raw_body << Search.clean_html(game[:description].to_s)
 
-      # 4. Création du Post
+      # 5. Création du Post
       post_creator = PostCreator.new(
         current_user,
         title: "Fiche de jeu : #{game[:name]}",
@@ -106,30 +113,6 @@ module DiscourseGameSheet
       else
         render json: { topic_url: post.topic.url }
       end
-    end
-
-    private
-
-    def fetch_additional_images(game_details)
-      images = []
-      images << game_details[:image] if game_details[:image].present?
-
-      # Tentative de récupération d'images supplémentaires via BGG
-      begin
-        id = game_details[:id]
-        uri = URI("https://boardgamegeek.com/xmlapi2/thing?id=#{CGI.escape(id.to_s)}&type=boardgame&versions=1")
-        response = DiscourseGameSheet::BggClient.get(uri)
-        doc = REXML::Document.new(response.body)
-
-        doc.elements.each("items/item/image") do |img|
-          url = img.text.to_s.strip
-          images << url if url.present? && !images.include?(url)
-        end
-      rescue StandardError
-        # Silently fail, on a au moins l'image principale
-      end
-
-      images.uniq
     end
   end
 end
