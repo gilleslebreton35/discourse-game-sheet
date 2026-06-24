@@ -2,117 +2,108 @@
 
 module DiscourseGameSheet
   class GameSheetController < ::ApplicationController
+    requires_plugin "discourse-game-sheet"
+
+    # Vérifier que l'utilisateur est connecté
     before_action :ensure_logged_in
 
-    # GET /game-sheet/search?q=catan
+    def index
+      # On va rendre une page Discourse normale (pas juste du JSON)
+      render :index
+    end
+
     def search
       params.require(:q)
-
-      data = DiscourseGameSheet::BggClient.search(params[:q])
-      render json: data
+      result = BggClient.search(params[:q])
+      render json: result
     end
 
-    # GET /game-sheet/game/:id
     def game
-      id = params.require(:id)
+      params.require(:id)
+      game_data = BggClient.game(params[:id])
+      render json: game_data
+    end
 
-      begin
-        game_details = DiscourseGameSheet::BggClient.game(id)
+    def create_topic
+      params.require(:game_id)
+      params.require(:category_id)
 
-        # Traduire si DeepL est configuré
-        api_key = SiteSetting.game_sheet_deepl_api_key.to_s.strip
-        if api_key.present?
-          target_lang = SiteSetting.try(:game_sheet_target_locale) || "FR"
-          game_details = DiscourseGameSheet::DeeplClient.translate_game(
-            game_details,
-            api_key: api_key,
-            target_lang: target_lang
-          )
-        end
+      game_data = BggClient.game(params[:game_id])
 
-        render json: game_details
-      rescue StandardError => e
-        render_json_error "Erreur BGG : #{e.message}", status: 422
+      # Traduction via DeepL
+      description_fr = DeeplClient.translate(game_data[:description]) if game_data[:description].present?
+
+      # Construction du contenu
+      markdown = build_game_markdown(game_data, description_fr, params)
+
+      # Création du topic
+      topic_opts = {
+        title: game_data[:name],
+        raw: markdown,
+        category: params[:category_id].to_i,
+        skip_validations: true
+      }
+
+      creator = PostCreator.new(current_user, topic_opts)
+      post = creator.create
+
+      if post.present?
+        render json: { topic_url: post.topic.url }
+      else
+        render json: { errors: creator.errors.full_messages }, status: 422
       end
     end
 
-    # POST /game-sheet/create-topic
-    def create_topic
-      clean_params = params.permit(:game_id, :category_id, selected_images: [], selected_videos: [])
+    private
 
-      clean_params.require(:game_id)
-      clean_params.require(:category_id)
+    def build_game_markdown(game_data, description_fr, params)
+      markdown = ""
 
-      begin
-        game = DiscourseGameSheet::BggClient.game(clean_params[:game_id])
-      rescue StandardError
-        return render_json_error "Jeu introuvable sur BoardGameGeek.", status: 404
+      # Image principale
+      markdown += "![#{game_data[:name]}](#{game_data[:image]})\n\n" if game_data[:image].present?
+
+      # Encart d'infos
+      markdown += "> **Note BGG :** #{game_data[:rating] || "N/A"} ⭐  \n"
+      markdown += "> **Joueurs :** #{game_data[:minplayers] || "?"} - #{game_data[:maxplayers] || "?"}  \n"
+      markdown += "> **Durée :** #{game_data[:playingtime] || "?"} min  \n"
+      markdown += "> **Âge :** #{game_data[:minage] || "?"}+\n\n"
+
+      # Description traduite
+      markdown += "---\n\n"
+      markdown += (description_fr || game_data[:description] || "")
+      markdown += "\n\n---\n\n"
+
+      # Catégories et mécanismes
+      if game_data[:categories].present? && game_data[:categories].any?
+        markdown += "**Catégories :** #{game_data[:categories].join(", ")}\n\n"
+      end
+      if game_data[:mechanics].present? && game_data[:mechanics].any?
+        markdown += "**Mécanismes :** #{game_data[:mechanics].join(", ")}\n\n"
       end
 
-      # Construction du corps Markdown
-      raw_body = String.new
-
-      # 1. Injection des illustrations sélectionnées
-      if clean_params[:selected_images].present?
-        raw_body << "<div class='bgg-topic-gallery'>\n\n"
-        clean_params[:selected_images].uniq.each do |img_url|
-          raw_body << "![Illustration](#{img_url})\n\n"
+      # Images sélectionnées
+      if params[:selected_images].present? && params[:selected_images].any?
+        markdown += "## 🖼️ Galerie d'images\n\n"
+        params[:selected_images].each do |img_url|
+          markdown += "![Image](#{img_url})\n"
         end
-        raw_body << "</div>\n\n"
+        markdown += "\n"
       end
 
-      # 2. Injection des vidéos sélectionnées
-      if clean_params[:selected_videos].present?
-        raw_body << "<div class='bgg-topic-videos'>\n\n"
-        clean_params[:selected_videos].uniq.each do |video_id|
-          raw_body << "https://www.youtube.com/watch?v=#{video_id}\n\n"
+      # Vidéos sélectionnées
+      if params[:selected_videos].present? && params[:selected_videos].any?
+        markdown += "## 🎬 Vidéos\n\n"
+        params[:selected_videos].each do |video_id|
+          markdown += "https://www.youtube.com/watch?v=#{video_id}\n"
         end
-        raw_body << "</div>\n\n"
+        markdown += "\n"
       end
 
-      # 3. Traduction si DeepL configuré
-      api_key = SiteSetting.game_sheet_deepl_api_key.to_s.strip
-      if api_key.present?
-        target_lang = SiteSetting.try(:game_sheet_target_locale) || "FR"
-        game = DiscourseGameSheet::DeeplClient.translate_game(
-          game,
-          api_key: api_key,
-          target_lang: target_lang
-        )
-      end
+      # Footer BGG
+      markdown += "---\n\n"
+      markdown += "[📖 Voir la fiche complète sur BoardGameGeek](https://boardgamegeek.com/boardgame/#{params[:game_id]})"
 
-      # 4. Injection de la fiche technique
-      raw_body << "## #{game[:name]}\n\n"
-      raw_body << "* **Année :** #{game[:yearpublished]}\n"
-      raw_body << "* **Joueurs :** #{game[:minplayers]} à #{game[:maxplayers]}\n"
-      raw_body << "* **Durée :** #{game[:playingtime]} minutes\n"
-      raw_body << "* **Âge minimum :** #{game[:minage]} ans\n\n"
-
-      if game[:categories].present?
-        raw_body << "* **Catégories :** #{game[:categories].join(', ')}\n"
-      end
-      if game[:mechanics].present?
-        raw_body << "* **Mécanismes :** #{game[:mechanics].join(', ')}\n"
-      end
-
-      raw_body << "\n### Description\n\n"
-      raw_body << Search.clean_html(game[:description].to_s)
-
-      # 5. Création du Post
-      post_creator = PostCreator.new(
-        current_user,
-        title: "Fiche de jeu : #{game[:name]}",
-        raw: raw_body,
-        category: clean_params[:category_id],
-        skip_validations: true
-      )
-      post = post_creator.create
-
-      if post_creator.errors.present?
-        render_json_error post_creator.errors.full_messages.join(", "), status: 422
-      else
-        render json: { topic_url: post.topic.url }
-      end
+      markdown
     end
   end
 end
