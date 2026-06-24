@@ -53,7 +53,6 @@ export default class AdminGameSheet extends Component {
   }
 
   @action
-  @action
 async loadGameDetails(gameId) {
   this.loadingDetails = true;
   this.error = null;
