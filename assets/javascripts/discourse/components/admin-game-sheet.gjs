@@ -20,6 +20,7 @@ export default class AdminGameSheet extends Component {
   @tracked selectedGame = null;
   @tracked loadingDetails = false;
   @tracked selectedImages = [];
+  @tracked selectedVideos = [];
   @tracked creatingTopic = false;
 
   @action
@@ -57,6 +58,7 @@ export default class AdminGameSheet extends Component {
     this.error = null;
     this.selectedGame = null;
     this.selectedImages = [];
+    this.selectedVideos = [];
 
     try {
       const response = await ajax(`/game-sheet/game/${gameId}`);
@@ -65,6 +67,10 @@ export default class AdminGameSheet extends Component {
       // Pré-sélectionner la première image
       if (this.selectedGame?.images?.length > 0) {
         this.selectedImages = [this.selectedGame.images[0]];
+      }
+      // Pré-sélectionner la première vidéo
+      if (this.selectedGame?.videos?.length > 0) {
+        this.selectedVideos = [this.selectedGame.videos[0].id];
       }
     } catch (e) {
       this.error = "Impossible de récupérer les détails du jeu.";
@@ -83,13 +89,32 @@ export default class AdminGameSheet extends Component {
   }
 
   @action
+  toggleVideoSelection(videoId) {
+    if (this.selectedVideos.includes(videoId)) {
+      this.selectedVideos = this.selectedVideos.filter(v => v !== videoId);
+    } else {
+      this.selectedVideos = [...this.selectedVideos, videoId];
+    }
+  }
+
+  @action
   isImageSelected(imgUrl) {
     return this.selectedImages.includes(imgUrl);
   }
 
   @action
+  isVideoSelected(videoId) {
+    return this.selectedVideos.includes(videoId);
+  }
+
+  @action
   imageBorderStyle(imgUrl) {
     return this.selectedImages.includes(imgUrl) ? 'var(--tertiary)' : 'transparent';
+  }
+
+  @action
+  videoBorderStyle(videoId) {
+    return this.selectedVideos.includes(videoId) ? 'var(--tertiary)' : 'transparent';
   }
 
   @action
@@ -103,7 +128,8 @@ export default class AdminGameSheet extends Component {
     const payload = {
       game_id: this.selectedGame.id,
       category_id: this.siteSettings.game_sheet_allowed_category_id,
-      selected_images: this.selectedImages
+      selected_images: this.selectedImages,
+      selected_videos: this.selectedVideos
     };
 
     try {
@@ -189,16 +215,16 @@ export default class AdminGameSheet extends Component {
         <p>{{i18n "loading"}}</p>
       {{/if}}
 
-    {{#if this.selectedGame}}
-  <div style="margin-top: 1em; padding: 1em; border: 1px solid var(--primary-low); border-radius: 8px;">
-    <div style="display: flex; gap: 1em; flex-wrap: wrap;">
-      {{#if this.selectedGame.image}}
-        <div style="flex-shrink: 0;">
-          <img src={{this.selectedGame.image}} alt={{this.selectedGame.name}} width="150" style="border-radius: 4px; object-fit: cover;" />
-        </div>
-      {{/if}}
-      <div style="flex: 1; min-width: 200px;">
-        <h2>{{this.selectedGame.name}}</h2>
+      {{#if this.selectedGame}}
+        <div style="margin-top: 1em; padding: 1em; border: 1px solid var(--primary-low); border-radius: 8px;">
+          <div style="display: flex; gap: 1em; flex-wrap: wrap;">
+            {{#if this.selectedGame.image}}
+              <div style="flex-shrink: 0;">
+                <img src={{this.selectedGame.image}} alt={{this.selectedGame.name}} width="150" style="border-radius: 4px; object-fit: cover;" />
+              </div>
+            {{/if}}
+            <div style="flex: 1; min-width: 200px;">
+              <h2>{{this.selectedGame.name}}</h2>
               <p><strong>Note BGG :</strong> {{this.selectedGame.rating}}</p>
               <p><strong>Joueurs :</strong> {{this.selectedGame.minplayers}} - {{this.selectedGame.maxplayers}}</p>
               <p><strong>Durée :</strong> {{this.selectedGame.playingtime}} min</p>
@@ -226,6 +252,27 @@ export default class AdminGameSheet extends Component {
                     style="display: none;"
                   />
                   <img src={{imgUrl}} width="150" style="border-radius: 2px;" />
+                </label>
+              {{/each}}
+            </div>
+          {{/if}}
+
+          {{#if this.selectedGame.videos.length}}
+            <h3 style="margin-top: 1em;">{{i18n "game_sheet.available_videos"}}</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5em;">
+              {{#each this.selectedGame.videos as |video|}}
+                <label style="border: 3px solid {{this.videoBorderStyle video.id}}; cursor: pointer; padding: 2px; border-radius: 4px; width: 230px;">
+                  <input
+                    type="checkbox"
+                    checked={{this.isVideoSelected video.id}}
+                    {{on "change" (fn this.toggleVideoSelection video.id)}}
+                    style="display: none;"
+                  />
+                  <div style="text-align: center;">
+                    <img src={{video.thumbnail}} width="220" style="border-radius: 2px;" />
+                    <p style="font-size: 0.85em; margin: 0.3em 0; font-weight: bold;">{{video.title}}</p>
+                    <p style="font-size: 0.75em; color: var(--primary-medium);">par {{video.author}}</p>
+                  </div>
                 </label>
               {{/each}}
             </div>
