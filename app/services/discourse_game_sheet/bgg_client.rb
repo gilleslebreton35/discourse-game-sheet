@@ -84,86 +84,70 @@ module ::DiscourseGameSheet
         mechanics << value if type == "boardgamemechanic" && value.present?
       end
 
-      # Collecter toutes les images disponibles
-images = []
-images << image if image.present?
+      # Collecter toutes les images disponibles (image principale uniquement)
+      images = []
+      images << image if image.present?
 
-# Essayer de récupérer des images supplémentaires depuis les versions (API v2)
-begin
-  versions_uri = URI("#{BASE_URL}/thing?id=#{CGI.escape(id)}&type=boardgame&versions=1")
-  versions_response = get(versions_uri)
-  versions_doc = REXML::Document.new(versions_response.body)
+      # Récupérer les images des versions
+      begin
+        versions_uri = URI("#{BASE_URL}/thing?id=#{CGI.escape(id)}&versions=1")
+        versions_response = get(versions_uri)
+        versions_doc = REXML::Document.new(versions_response.body)
 
-  versions_doc.elements.each("items/item") do |version_item|
-    version_item.elements.each("image") do |img|
-      url = img.text.to_s.strip
-      images << url if url.present? && !images.include?(url)
-    end
-  end
-rescue StandardError
-end
+        versions_doc.elements.each("items/item") do |version_item|
+          version_item.elements.each("image") do |img|
+            url = img.text.to_s.strip
+            images << url if url.present? && !images.include?(url)
+          end
+        end
+      rescue StandardError => e
+        Rails.logger.warn "[GameSheet] Erreur récupération images versions BGG: #{e.message}"
+      end
 
-# Essayer de récupérer des images supplémentaires via l'API v1 (gallery)
-begin
-  # L'API v1 BGG a parfois plus d'images
-  gallery_uri = URI("https://boardgamegeek.com/boardgame/#{id}/images?ajax=1")
-  gallery_response = get(gallery_uri)
-  
-  # On extrait les URLs d'images de la réponse HTML/JSON
-  # Les images BGG sont généralement au format https://cf.geekdo-images.com/...
-  image_urls = gallery_response.body.scan(%r{https?://cf\.geekdo-images\.com/[^"'\s]+})
-  
-  image_urls.uniq.each do |url|
-    images << url if !images.include?(url)
-  end
-rescue StandardError => e
-  Rails.logger.warn "[GameSheet] Erreur récupération galerie BGG: #{e.message}"
-end
+      # Récupérer toutes les images de la galerie via un appel séparé à "thing" avec toutes les infos
+      begin
+        # L'API "thing" peut renvoyer plusieurs images via le champ "image" différent pour chaque version/accessoire
+        all_ids_uri = URI("#{BASE_URL}/thing?id=#{CGI.escape(id)}&type=boardgame,boardgameaccessory,boardgameexpansion")
+        all_ids_response = get(all_ids_uri)
+        all_ids_doc = REXML::Document.new(all_ids_response.body)
 
-# Alternative plus simple : utiliser boardgamegeek.com directement pour les images
-# Méthode la plus fiable : parser la page du jeu sur BGG
-begin
-  page_uri = URI("https://boardgamegeek.com/boardgame/#{id}")
-  page_response = get(page_uri)
-  
-  # Chercher les images dans le HTML de la page
-  # La galerie d'images est souvent dans des éléments avec classe "carousel"
-  img_urls = page_response.body.scan(%r{https?://cf\.geekdo-images\.com/[^"'\s]+(?:png|jpg|jpeg|gif)}i)
-  
-  img_urls.uniq.each do |url|
-    images << url if !images.include?(url)
-  end
-rescue StandardError => e
-  Rails.logger.warn "[GameSheet] Erreur récupération page BGG: #{e.message}"
-end
+        all_ids_doc.elements.each("items/item") do |sub_item|
+          sub_item.elements.each("image") do |img|
+            url = img.text.to_s.strip
+            images << url if url.present? && !images.include?(url)
+          end
+        end
+      rescue StandardError => e
+        Rails.logger.warn "[GameSheet] Erreur récupération images supplémentaires BGG: #{e.message}"
+      end
 
-# Récupérer les vidéos
-videos = []
-begin
-  videos_uri = URI("#{BASE_URL}/thing?id=#{CGI.escape(id)}&videos=1")
-  videos_response = get(videos_uri)
-  videos_doc = REXML::Document.new(videos_response.body)
+      # Récupérer les vidéos
+      videos = []
+      begin
+        videos_uri = URI("#{BASE_URL}/thing?id=#{CGI.escape(id)}&videos=1")
+        videos_response = get(videos_uri)
+        videos_doc = REXML::Document.new(videos_response.body)
 
-  videos_doc.elements.each("items/item/videos/video") do |v|
-    language = v.attributes["language"].to_s.downcase
-    
-    # Ne garder que les vidéos en français
-    next unless language == "fr" || language == "french"
-    
-    video = {
-      id: v.attributes["id"],
-      title: v.attributes["title"],
-      author: v.attributes["author"],
-      category: v.attributes["category"],
-      language: language,
-      thumbnail: v.attributes["thumbnail"] || "https://img.youtube.com/vi/#{v.attributes['id']}/mqdefault.jpg",
-      url: "https://www.youtube.com/watch?v=#{v.attributes['id']}"
-    }
-    videos << video
-  end
-rescue StandardError => e
-  Rails.logger.warn "[GameSheet] Erreur récupération vidéos BGG: #{e.message}"
-end
+        videos_doc.elements.each("items/item/videos/video") do |v|
+          language = (v.attributes["language"] || "").to_s.downcase
+          
+          # Ne garder que les vidéos françaises
+          next unless ["fr", "french", "fr-fr"].include?(language)
+
+          video = {
+            id: v.attributes["id"],
+            title: v.attributes["title"],
+            author: v.attributes["author"],
+            category: v.attributes["category"],
+            language: language,
+            thumbnail: v.attributes["thumbnail"] || "https://img.youtube.com/vi/#{v.attributes['id']}/mqdefault.jpg",
+            url: "https://www.youtube.com/watch?v=#{v.attributes['id']}"
+          }
+          videos << video
+        end
+      rescue StandardError => e
+        Rails.logger.warn "[GameSheet] Erreur récupération vidéos BGG: #{e.message}"
+      end
 
       rating = item.elements["statistics/ratings/average"]&.attributes&.fetch("value", nil)
 
