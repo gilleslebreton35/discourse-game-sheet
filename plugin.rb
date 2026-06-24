@@ -10,10 +10,6 @@ enabled_site_setting :game_sheet_enabled
 
 register_asset "stylesheets/common/game-sheet.scss"
 
-register_page "game-sheet", {
-  route: { path: "/game-sheet" }
-}
-
 after_initialize do
   require_relative "app/services/discourse_game_sheet/bgg_client"
   require_relative "app/services/discourse_game_sheet/deepl_client"
@@ -22,14 +18,11 @@ after_initialize do
 
   Discourse::Application.routes.prepend do
     # Route pour la page principale (accessible aux membres connectés)
-    get "/game-sheet" => "discourse_game_sheet/game_sheet#index", constraints: ->(req) { req.session[:current_user_id].present? }
+    get "/game-sheet" => "discourse_game_sheet/game_sheet#index"
     
     # Routes API (accessibles aux membres connectés)
-    get "/game-sheet/search" => "discourse_game_sheet/game_sheet#search", constraints: ->(req) { req.session[:current_user_id].present? }, defaults: { format: :json }
-    get "/game-sheet/game/:id" => "discourse_game_sheet/game_sheet#game", constraints: ->(req) { req.session[:current_user_id].present? }, defaults: { format: :json }
-    post "/game-sheet/create-topic" => "discourse_game_sheet/game_sheet#create_topic", constraints: ->(req) { req.session[:current_user_id].present? }, defaults: { format: :json }
+    get "/game-sheet/search" => "discourse_game_sheet/game_sheet#search", defaults: { format: :json }
+    get "/game-sheet/game/:id" => "discourse_game_sheet/game_sheet#game", defaults: { format: :json }
+    post "/game-sheet/create-topic" => "discourse_game_sheet/game_sheet#create_topic", defaults: { format: :json }
   end
-
-  # Ajouter un lien dans le menu utilisateur
-  add_to_serializer(:current_user, :game_sheet_path) { "/game-sheet" }
 end
