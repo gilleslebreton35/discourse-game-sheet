@@ -6,7 +6,9 @@ module DiscourseGameSheet
 
     # Vérifier que l'utilisateur est connecté
     before_action :ensure_logged_in
-
+    def admin
+      render html: "", layout: true
+    end
     def index
       render html: "", layout: true
     end
