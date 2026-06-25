@@ -13,10 +13,7 @@ module DiscourseGameSheet
     def details
       params.require(:id)
       data = DiscourseGameSheet::BggClient.game_details(params[:id])
-      
-      # Traduction magique de la description via DeepL
       data[:description_fr] = DiscourseGameSheet::DeeplClient.translate(data[:description])
-      
       render json: data
     end
 
@@ -27,7 +24,6 @@ module DiscourseGameSheet
       game = DiscourseGameSheet::BggClient.game_details(p[:game_id])
       game[:description_fr] = DiscourseGameSheet::DeeplClient.translate(game[:description])
 
-      # Construction du Markdown du sujet
       raw_body = String.new
       if p[:include_image] == "true" && game[:image].present?
         raw_body << "![#{game[:name]}]({#game[:image]})\n\n"
@@ -43,7 +39,7 @@ module DiscourseGameSheet
       if p[:selected_videos].present?
         raw_body << "### Vidéos Sélectionnées\n"
         p[:selected_videos].each do |video_url|
-          raw_body << "#{video_url}\n" # Discourse intègre automatiquement les lecteurs YouTube/Vimeo via l'URL brute
+          raw_body << "#{video_url}\n"
         end
       end
 
@@ -67,7 +63,7 @@ module DiscourseGameSheet
 
     def ensure_allowed_group
       allowed_group = SiteSetting.game_sheet_allowed_group
-      return if current_user.staff? # Les admins/modos ont toujours accès
+      return if current_user.staff?
 
       if allowed_group.present?
         group = Group.find_by(name: allowed_group)
