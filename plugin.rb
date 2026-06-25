@@ -27,13 +27,11 @@ after_initialize do
     post "/create-topic" => "game_sheet#create_topic"
   end
 
-  # Force Rails à charger l'application Discourse standard pour cette URL (Frontend)
-  Discourse::Application.routes.prepend do
-    get "/game-sheet" => "application#index", constraints: { format: /(html|\*\/|\s*)/ }
-  end
-
-  # Monte l'API du plugin sur un sous-chemin dédié (Backend)
+  # On dit à Discourse : 
+  # 1. De charger la coquille vide pour /game-sheet (Ember prendra le relais pour l'affichage)
+  # 2. De monter notre API backend sous /game-sheet-api
   Discourse::Application.routes.append do
+    get "/game-sheet" => "default#empty"
     mount ::DiscourseGameSheet::Engine, at: "/game-sheet-api"
   end
 end
