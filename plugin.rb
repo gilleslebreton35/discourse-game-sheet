@@ -25,4 +25,9 @@ after_initialize do
     get "/game-sheet/game/:id" => "discourse_game_sheet/game_sheet#game", defaults: { format: :json }
     post "/game-sheet/create-topic" => "discourse_game_sheet/game_sheet#create_topic", defaults: { format: :json }
   end
+
+  # ROUTE ADMIN - À AJOUTER
+  Discourse::Application.routes.append do
+    get "/admin/plugins/game-sheet" => "discourse_game_sheet/game_sheet#admin", constraints: AdminConstraint.new
+  end
 end
