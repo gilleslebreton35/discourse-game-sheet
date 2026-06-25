@@ -6,7 +6,7 @@
 
 enabled_site_setting :game_sheet_enabled
 
-#register_asset "stylesheets/game-sheet.scss" # Si tu veux ajouter du CSS plus tard
+# register_asset "stylesheets/game-sheet.scss" # Commenté pour éviter l'erreur de compilation au rebuild
 
 after_initialize do
   module ::DiscourseGameSheet
@@ -16,7 +16,7 @@ after_initialize do
     end
   end
 
-  # Chargement des fichiers manuellement pour s'assurer de leur présence
+  # Chargement des fichiers manuellement
   load File.expand_path("../app/services/discourse_game_sheet/bgg_client.rb", __FILE__)
   load File.expand_path("../app/services/discourse_game_sheet/deepl_client.rb", __FILE__)
   load File.expand_path("../app/controllers/discourse_game_sheet/game_sheet_controller.rb", __FILE__)
@@ -27,7 +27,13 @@ after_initialize do
     post "/create-topic" => "game_sheet#create_topic"
   end
 
+  # Force Rails à charger l'application Discourse standard pour cette URL (Frontend)
+  Discourse::Application.routes.prepend do
+    get "/game-sheet" => "application#index", constraints: { format: /(html|\*\/|\s*)/ }
+  end
+
+  # Monte l'API du plugin sur un sous-chemin dédié (Backend)
   Discourse::Application.routes.append do
-    mount ::DiscourseGameSheet::Engine, at: "/game-sheet"
+    mount ::DiscourseGameSheet::Engine, at: "/game-sheet-api"
   end
 end
