@@ -7,6 +7,7 @@
 enabled_site_setting :game_sheet_enabled
 
 # register_asset "stylesheets/game-sheet.scss" # Commenté pour éviter l'erreur de compilation au rebuild
+register_asset "javascripts/discourse/game-sheet-route-map.js"
 
 after_initialize do
   module ::DiscourseGameSheet
