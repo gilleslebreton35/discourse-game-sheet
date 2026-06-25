@@ -4,8 +4,8 @@ import { action } from "@ember/object";
 import { on } from "@ember/modifier";
 import { service } from "@ember/service";
 import { ajax } from "discourse/lib/ajax";
-import popupAjaxError from "discourse/lib/popup-ajax-error";
-import { fn } from "@ember/helper"; // Obligatoire en mode strict pour utiliser (fn ...)
+import { popupAjaxError } from "discourse/lib/ajax-error"; // L'import corrigé
+import { fn } from "@ember/helper";
 
 export default class GameSheetMain extends Component {
   @service siteSettings;
@@ -25,7 +25,6 @@ export default class GameSheetMain extends Component {
     return this.siteSettings.categories || [];
   }
 
-  // Fonctions de mise à jour explicites (remplacent le "mutex" qui faisait planter le compilateur)
   @action
   updateQuery(event) {
     this.query = event.target.value;
