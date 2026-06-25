@@ -9,6 +9,7 @@
 enabled_site_setting :game_sheet_enabled
 
 register_asset "stylesheets/common/game-sheet.scss"
+admin_route "discourse-game-sheet"
 
 after_initialize do
   require_relative "app/services/discourse_game_sheet/bgg_client"
