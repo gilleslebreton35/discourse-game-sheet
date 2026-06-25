@@ -9,7 +9,6 @@
 enabled_site_setting :game_sheet_enabled
 
 register_asset "stylesheets/common/game-sheet.scss"
-admin_route "discourse-game-sheet"
 
 after_initialize do
   require_relative "app/services/discourse_game_sheet/bgg_client"
@@ -27,8 +26,8 @@ after_initialize do
     post "/game-sheet/create-topic" => "discourse_game_sheet/game_sheet#create_topic", defaults: { format: :json }
   end
 
-  # ROUTE ADMIN - À AJOUTER
+  # Route admin qui redirige vers la page publique
   Discourse::Application.routes.append do
-    get "/admin/plugins/game-sheet" => "discourse_game_sheet/game_sheet#admin", constraints: AdminConstraint.new
+    get "/admin/plugins/game-sheet" => redirect("/game-sheet"), constraints: AdminConstraint.new
   end
 end
