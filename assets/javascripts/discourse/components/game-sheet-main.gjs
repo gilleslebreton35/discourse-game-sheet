@@ -5,6 +5,7 @@ import { on } from "@ember/modifier";
 import { service } from "@ember/service";
 import { ajax } from "discourse/lib/ajax";
 import popupAjaxError from "discourse/lib/popup-ajax-error";
+import { fn } from "@ember/helper"; // Obligatoire en mode strict pour utiliser (fn ...)
 
 export default class GameSheetMain extends Component {
   @service siteSettings;
@@ -24,6 +25,22 @@ export default class GameSheetMain extends Component {
     return this.siteSettings.categories || [];
   }
 
+  // Fonctions de mise à jour explicites (remplacent le "mutex" qui faisait planter le compilateur)
+  @action
+  updateQuery(event) {
+    this.query = event.target.value;
+  }
+
+  @action
+  updateIncludeImage(event) {
+    this.includeImage = event.target.checked;
+  }
+
+  @action
+  updateCategory(event) {
+    this.destinationCategory = event.target.value;
+  }
+
   @action
   async searchGames() {
     if (!this.query) return;
@@ -31,7 +48,6 @@ export default class GameSheetMain extends Component {
     this.selectedGame = null;
 
     try {
-      // Appel à la nouvelle URL de l'API
       const response = await ajax(`/game-sheet-api/search?q=${encodeURIComponent(this.query)}`);
       this.results = response.results || [];
     } catch (e) {
@@ -46,7 +62,6 @@ export default class GameSheetMain extends Component {
     this.loadingDetails = true;
     this.selectedVideos = [];
     try {
-      // Appel à la nouvelle URL de l'API
       this.selectedGame = await ajax(`/game-sheet-api/details?id=${gameId}`);
     } catch (e) {
       popupAjaxError(e);
@@ -73,7 +88,6 @@ export default class GameSheetMain extends Component {
 
     this.creating = true;
     try {
-      // Appel à la nouvelle URL de l'API
       const res = await ajax("/game-sheet-api/create-topic", {
         type: "POST",
         data: {
@@ -100,7 +114,7 @@ export default class GameSheetMain extends Component {
           type="text" 
           placeholder="Rechercher un jeu sur BoardGameGeek..." 
           value={{this.query}}
-          {{on "input" (action (mutex this.query) value="target.value")}}
+          {{on "input" this.updateQuery}}
           style="flex: 1;"
         />
         <button type="button" class="btn btn-primary" {{on "click" this.searchGames}}>
@@ -124,7 +138,7 @@ export default class GameSheetMain extends Component {
               {{#each this.results as |game|}}
                 <tr>
                   <td><img src={{game.thumbnail}} style="width: 50px; height: 50px; object-fit: cover;" alt="" /></td>
-                  <td><strong>{{game.name}}</strong></td>
+                  <td><strong>{{{game.name}}}</strong></td>
                   <td>{{game.yearpublished}}</td>
                   <td>
                     <button type="button" class="btn" {{on "click" (fn this.selectGame game.id)}}>Choisir</button>
@@ -145,7 +159,7 @@ export default class GameSheetMain extends Component {
         <div class="game-configuration" style="display: flex; gap: 20px;">
           
           <div style="flex: 1;">
-            <h2>{{this.selectedGame.name}} ({{this.selectedGame.yearpublished}})</h2>
+            <h2>{{{this.selectedGame.name}}} ({{this.selectedGame.yearpublished}})</h2>
             <p>{{{this.selectedGame.description_fr}}}</p>
           </div>
 
@@ -153,7 +167,7 @@ export default class GameSheetMain extends Component {
             <h3>Options de la fiche</h3>
             
             <label style="display: block; margin-bottom: 15px;">
-              <input type="checkbox" checked={{this.includeImage}} {{on "change" (action (mutex this.includeImage) value="target.checked")}} />
+              <input type="checkbox" checked={{this.includeImage}} {{on "change" this.updateIncludeImage}} />
               Inclure l'image principale du jeu dans le sujet
             </label>
 
@@ -169,7 +183,7 @@ export default class GameSheetMain extends Component {
 
             <div style="margin-top: 20px;">
               <h4>Catégorie de destination :</h4>
-              <select {{on "change" (action (mutex this.destinationCategory) value="target.value")}}>
+              <select {{on "change" this.updateCategory}}>
                 <option value="">-- Choisir une catégorie --</option>
                 {{#each this.availableCategories as |cat|}}
                   <option value={{cat.id}}>{{cat.name}}</option>
