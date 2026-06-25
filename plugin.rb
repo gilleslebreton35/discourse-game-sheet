@@ -28,10 +28,10 @@ after_initialize do
   end
 
   # On dit à Discourse : 
-  # 1. De charger l'application Ember pour /game-sheet (Correction appliquée ici)
+  # 1. De charger la coquille vide pour /game-sheet (Ember prendra le relais)
   # 2. De monter notre API backend sous /game-sheet-api
   Discourse::Application.routes.append do
-    get "/game-sheet" => "application#index"
+    get "/game-sheet" => "default#empty"
     mount ::DiscourseGameSheet::Engine, at: "/game-sheet-api"
   end
 end
