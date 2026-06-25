@@ -1,5 +1,7 @@
 import GameSheetMain from "../components/game-sheet-main";
 
-<template>
+const GameSheetTemplate = <template>
   <GameSheetMain />
-</template>
+</template>;
+
+export default GameSheetTemplate;
