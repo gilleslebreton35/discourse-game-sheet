@@ -2,99 +2,79 @@
 
 module DiscourseGameSheet
   class GameSheetController < ::ApplicationController
-    requires_plugin "discourse-game-sheet"
-
-    # Vérifier que l'utilisateur est connecté
     before_action :ensure_logged_in
-    def admin
-      render html: "", layout: true
-    end
-    def index
-      render html: "", layout: true
-    end
+    before_action :ensure_allowed_group
 
     def search
       params.require(:q)
-      result = BggClient.search(params[:q])
-      render json: result
+      render json: DiscourseGameSheet::BggClient.search(params[:q])
     end
 
-    def game
+    def details
       params.require(:id)
-      game_data = BggClient.game(params[:id])
-      render json: game_data
+      data = DiscourseGameSheet::BggClient.game_details(params[:id])
+      
+      # Traduction magique de la description via DeepL
+      data[:description_fr] = DiscourseGameSheet::DeeplClient.translate(data[:description])
+      
+      render json: data
     end
 
     def create_topic
-      params.require(:game_id)
-      params.require(:category_id)
+      p = params.permit(:game_id, :category_id, :include_image, selected_videos: [])
+      p.require([:game_id, :category_id])
 
-      game_data = BggClient.game(params[:game_id])
+      game = DiscourseGameSheet::BggClient.game_details(p[:game_id])
+      game[:description_fr] = DiscourseGameSheet::DeeplClient.translate(game[:description])
 
-      description_fr = DeeplClient.translate(game_data[:description]) if game_data[:description].present?
+      # Construction du Markdown du sujet
+      raw_body = String.new
+      if p[:include_image] == "true" && game[:image].present?
+        raw_body << "![#{game[:name]}]({#game[:image]})\n\n"
+      end
 
-      markdown = build_game_markdown(game_data, description_fr, params)
+      raw_body << "### Description\n#{Search.clean_html(game[:description_fr])}\n\n"
+      raw_body << "### Informations Techniques\n"
+      raw_body << "* **Année de sortie :** #{game[:yearpublished]}\n"
+      raw_body << "* **Nombre de joueurs :** #{game[:minplayers]} à #{game[:maxplayers]}\n"
+      raw_body << "* **Durée d'une partie :** #{game[:playingtime]} minutes\n"
+      raw_body << "* **Âge recommandé :** #{game[:minage]}+\n\n"
 
-      topic_opts = {
-        title: game_data[:name],
-        raw: markdown,
-        category: params[:category_id].to_i,
+      if p[:selected_videos].present?
+        raw_body << "### Vidéos Sélectionnées\n"
+        p[:selected_videos].each do |video_url|
+          raw_body << "#{video_url}\n" # Discourse intègre automatiquement les lecteurs YouTube/Vimeo via l'URL brute
+        end
+      end
+
+      post_creator = PostCreator.new(
+        current_user,
+        title: "Fiche de jeu : #{game[:name]}",
+        raw: raw_body,
+        category: p[:category_id],
         skip_validations: true
-      }
+      )
+      post = post_creator.create
 
-      creator = PostCreator.new(current_user, topic_opts)
-      post = creator.create
-
-      if post.present?
-        render json: { topic_url: post.topic.url }
+      if post_creator.errors.present?
+        render_json_error post_creator.errors.full_messages.join(", "), status: 422
       else
-        render json: { errors: creator.errors.full_messages }, status: 422
+        render json: { topic_url: post.topic.url }
       end
     end
 
     private
 
-    def build_game_markdown(game_data, description_fr, params)
-      markdown = ""
+    def ensure_allowed_group
+      allowed_group = SiteSetting.game_sheet_allowed_group
+      return if current_user.staff? # Les admins/modos ont toujours accès
 
-      markdown += "![#{game_data[:name]}](#{game_data[:image]})\n\n" if game_data[:image].present?
-
-      markdown += "> **Note BGG :** #{game_data[:rating] || "N/A"} ⭐  \n"
-      markdown += "> **Joueurs :** #{game_data[:minplayers] || "?"} - #{game_data[:maxplayers] || "?"}  \n"
-      markdown += "> **Durée :** #{game_data[:playingtime] || "?"} min  \n"
-      markdown += "> **Âge :** #{game_data[:minage] || "?"}+\n\n"
-
-      markdown += "---\n\n"
-      markdown += (description_fr || game_data[:description] || "")
-      markdown += "\n\n---\n\n"
-
-      if game_data[:categories].present? && game_data[:categories].any?
-        markdown += "**Catégories :** #{game_data[:categories].join(", ")}\n\n"
-      end
-      if game_data[:mechanics].present? && game_data[:mechanics].any?
-        markdown += "**Mécanismes :** #{game_data[:mechanics].join(", ")}\n\n"
-      end
-
-      if params[:selected_images].present? && params[:selected_images].any?
-        markdown += "## 🖼️ Galerie d'images\n\n"
-        params[:selected_images].each do |img_url|
-          markdown += "![Image](#{img_url})\n"
+      if allowed_group.present?
+        group = Group.find_by(name: allowed_group)
+        if group.blank? || !group.users.where(id: current_user.id).exists?
+          raise Discourse::InvalidAccess.new("Cet espace est réservé aux abonnés.")
         end
-        markdown += "\n"
       end
-
-      if params[:selected_videos].present? && params[:selected_videos].any?
-        markdown += "## 🎬 Vidéos\n\n"
-        params[:selected_videos].each do |video_id|
-          markdown += "https://www.youtube.com/watch?v=#{video_id}\n"
-        end
-        markdown += "\n"
-      end
-
-      markdown += "---\n\n"
-      markdown += "[📖 Voir la fiche complète sur BoardGameGeek](https://boardgamegeek.com/boardgame/#{params[:game_id]})"
-
-      markdown
     end
   end
 end
