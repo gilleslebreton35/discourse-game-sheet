@@ -7,7 +7,6 @@
 enabled_site_setting :game_sheet_enabled
 
 # register_asset "stylesheets/game-sheet.scss" # Commenté pour éviter l'erreur de compilation au rebuild
-#register_asset "javascripts/discourse/game-sheet-route-map.js"
 
 after_initialize do
   module ::DiscourseGameSheet
@@ -29,10 +28,10 @@ after_initialize do
   end
 
   # On dit à Discourse : 
-  # 1. De charger la coquille vide pour /game-sheet (Ember prendra le relais pour l'affichage)
+  # 1. De charger l'application Ember pour /game-sheet (Correction appliquée ici)
   # 2. De monter notre API backend sous /game-sheet-api
   Discourse::Application.routes.append do
-    get "/game-sheet" => "default#empty"
+    get "/game-sheet" => "application#index"
     mount ::DiscourseGameSheet::Engine, at: "/game-sheet-api"
   end
 end
