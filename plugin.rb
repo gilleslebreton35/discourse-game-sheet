@@ -6,7 +6,7 @@
 
 enabled_site_setting :game_sheet_enabled
 
-register_asset "stylesheets/game-sheet.scss" # Si tu veux ajouter du CSS plus tard
+#register_asset "stylesheets/game-sheet.scss" # Si tu veux ajouter du CSS plus tard
 
 after_initialize do
   module ::DiscourseGameSheet
