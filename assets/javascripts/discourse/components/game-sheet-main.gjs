@@ -20,7 +20,6 @@ export default class GameSheetMain extends Component {
   @tracked selectedVideos = [];
   @tracked creating = false;
 
-  // Récupère la liste des catégories éligibles sur le forum
   get availableCategories() {
     return this.siteSettings.categories || [];
   }
@@ -32,7 +31,8 @@ export default class GameSheetMain extends Component {
     this.selectedGame = null;
 
     try {
-      const response = await ajax(`/game-sheet/search.json?q=${this.query}`);
+      // Appel à la nouvelle URL de l'API
+      const response = await ajax(`/game-sheet-api/search?q=${encodeURIComponent(this.query)}`);
       this.results = response.results || [];
     } catch (e) {
       popupAjaxError(e);
@@ -46,7 +46,8 @@ export default class GameSheetMain extends Component {
     this.loadingDetails = true;
     this.selectedVideos = [];
     try {
-      this.selectedGame = await ajax(`/game-sheet/details.json?id=${gameId}`);
+      // Appel à la nouvelle URL de l'API
+      this.selectedGame = await ajax(`/game-sheet-api/details?id=${gameId}`);
     } catch (e) {
       popupAjaxError(e);
     } finally {
@@ -72,7 +73,8 @@ export default class GameSheetMain extends Component {
 
     this.creating = true;
     try {
-      const res = await ajax("/game-sheet/create-topic.json", {
+      // Appel à la nouvelle URL de l'API
+      const res = await ajax("/game-sheet-api/create-topic", {
         type: "POST",
         data: {
           game_id: this.selectedGame.id,
