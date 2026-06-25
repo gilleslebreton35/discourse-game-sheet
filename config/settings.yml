@@ -1,22 +1,11 @@
 plugins:
   game_sheet_enabled:
     default: true
-    client: false
-
-  game_sheet_allowed_category_id:
-    default: 1
-    client: false
-
-  game_sheet_deepl_api_key:
-    default: ""
-    secret: true
-    client: false
-
+    client: true
   game_sheet_bgg_token:
     default: ""
-    secret: true
-    client: false
-
-  game_sheet_target_locale:
-    default: "FR"
-    client: false
+  game_sheet_deepl_api_key:
+    default: ""
+  game_sheet_allowed_group:
+    default: "trust_level_1" # Change par le nom de ton groupe d'abonnés (ex: "subscribers")
+    client: true
