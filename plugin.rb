@@ -1,6 +1,6 @@
 # name: discourse-game-sheet
 # about: Plugin pour créer des fiches de jeux depuis BGG
-# version: 0.8
+# version: 0.8.1
 # authors: Toi
 
 enabled_site_setting :game_sheet_enabled
@@ -13,10 +13,8 @@ after_initialize do
   require 'erb'
 
   # Ajout des settings personnalisés dans la base de données
-  # On utilise add_model_scope pour enregistrer les settings
   SiteSetting.refresh!
   
-  # Création des settings s'ils n'existent pas encore
   unless SiteSetting.where(name: "game_sheet_bgg_api_key").exists?
     SiteSetting.create!(name: "game_sheet_bgg_api_key", data_type: 1, value: "")
   end
@@ -29,12 +27,8 @@ after_initialize do
     class BggClient
       BASE_URL = "https://boardgamegeek.com/xmlapi2"
 
-      def self.api_key
-        SiteSetting.game_sheet_bgg_api_key.presence
-      end
-
       def self.request_bgg(path)
-        sleep 1
+        sleep 1 # Anti-spam BGG obligatoire
         uri = URI.parse("#{BASE_URL}/#{path}")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
@@ -42,12 +36,12 @@ after_initialize do
         request = Net::HTTP::Get.new(uri.request_uri)
         request["User-Agent"] = "Discourse-GameSheet/1.0"
         
-        if api_key
-          request["Authorization"] = "Bearer #{api_key}"
-        end
+        # ⚠️ TOKEN OBLIGATOIRE pour que BGG réponde
+        request["Authorization"] = "Bearer a904f3bf-f154-4890-9618-4dc3835e40c7"
         
         begin
           response = http.request(request)
+          Rails.logger.warn("BGG REQUEST: #{uri} | Status: #{response.code}")
           response
         rescue => e
           Rails.logger.error("BGG ERROR: #{e.message}")
@@ -63,8 +57,8 @@ after_initialize do
           resp = request_bgg("search?query=#{encoded_query}&type=boardgame")
           
           if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
-             Rails.logger.warn("BGG SEARCH: Erreur réseau ou API - Code: #{resp&.code}")
-             return { bgg: [] }
+            Rails.logger.warn("BGG SEARCH: Erreur réseau ou API - Code: #{resp&.code}")
+            return { bgg: [] }
           end
 
           doc = Nokogiri::XML(resp.body)
