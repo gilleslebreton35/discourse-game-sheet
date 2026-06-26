@@ -4,9 +4,8 @@
 # authors: Ton Nom
 # url: https://github.com/ton-pseudo/discourse-game-sheet
 
-enabled_site_setting :game_sheet_enabled
-
-# register_asset "stylesheets/game-sheet.scss" # Commenté pour éviter l'erreur de compilation au rebuild
+# On commente ceci temporairement pour forcer Discourse à charger le JS du plugin
+# enabled_site_setting :game_sheet_enabled
 
 after_initialize do
   module ::DiscourseGameSheet
@@ -27,11 +26,8 @@ after_initialize do
     post "/create-topic" => "game_sheet#create_topic"
   end
 
-  # On dit à Discourse : 
-  # 1. De charger la coquille vide pour /game-sheet (Ember prendra le relais)
-  # 2. De monter notre API backend sous /game-sheet-api
+  # On ne met PLUS de route pour /game-sheet ici, Rails laissera Discourse gérer le catch-all
   Discourse::Application.routes.append do
-    get "/game-sheet" => "default#empty"
     mount ::DiscourseGameSheet::Engine, at: "/game-sheet-api"
   end
 end
