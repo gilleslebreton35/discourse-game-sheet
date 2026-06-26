@@ -1,6 +1,6 @@
 # name: discourse-game-sheet
 # about: Plugin pour créer des fiches de jeux depuis BGG
-# version: 1.0
+# version: 0.7
 # authors: Toi
 
 enabled_site_setting :game_sheet_enabled
@@ -15,18 +15,14 @@ after_initialize do
   module ::DiscourseGameSheet
     class BggClient
       BASE_URL = "https://boardgamegeek.com/xmlapi2"
-      BGG_TOKEN = "a904f3bf-f154-4890-9618-4dc3835e40c7" 
 
       def self.request_bgg(path)
+        sleep 1
         uri = URI.parse("#{BASE_URL}/#{path}")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
-        http.open_timeout = 5
-        http.read_timeout = 10
-        
         request = Net::HTTP::Get.new(uri.request_uri)
-        request["User-Agent"] = "Mozilla/5.0 (compatible; DiscourseGameSheet/1.0)"
-        request["Authorization"] = "Bearer #{BGG_TOKEN}" 
+        request["User-Agent"] = "Discourse-GameSheet"
         
         begin
           response = http.request(request)
@@ -40,29 +36,36 @@ after_initialize do
       def self.search(query)
         return { bgg: [] } if query.blank?
         
-        encoded = ERB::Util.url_encode(query.to_s.strip)
-        resp = request_bgg("search?query=#{encoded}&type=boardgame")
-        
-        return { bgg: [] } if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
-        
-        doc = Nokogiri::XML(resp.body)
-        items = doc.xpath('//item').first(10)
-        return { bgg: [] } if items.empty?
+        begin
+          encoded_query = ERB::Util.url_encode(query.to_s.strip)
+          resp = request_bgg("search?query=#{encoded_query}&type=boardgame")
+          
+          if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
+             Rails.logger.warn("BGG SEARCH: Erreur réseau ou API")
+             return { bgg: [] }
+          end
 
-        ids = items.map { |i| i['id'] }.join(',')
-        resp_details = request_bgg("thing?id=#{ids}")
-        return { bgg: [] } if resp_details.nil? || !resp_details.is_a?(Net::HTTPSuccess)
+          doc = Nokogiri::XML(resp.body)
+          items = doc.xpath('//item')
+          
+          if items.empty?
+            Rails.logger.warn("BGG SEARCH: Aucun item trouvé avec le XPath //item")
+            return { bgg: [] }
+          end
 
-        details_doc = Nokogiri::XML(resp_details.body)
-        results = details_doc.xpath('//item').map do |item|
-          {
-            id: item['id'],
-            name: item.at_xpath('name')&.[]('value'),
-            yearpublished: item.at_xpath('yearpublished')&.[]('value'),
-            image: item.at_xpath('thumbnail')&.text
-          }
+          results = items.first(10).map do |item|
+            {
+              id: item['id'],
+              name: item.at_xpath('name')&.[]('value'),
+              yearpublished: item.at_xpath('yearpublished')&.[]('value'),
+              thumbnail: item.at_xpath('thumbnail')&.text
+            }
+          end
+          { bgg: results }
+        rescue => e
+          Rails.logger.error("BGG SEARCH CRASH: #{e.message}")
+          { bgg: [] }
         end
-        { bgg: results }
       end
 
       def self.game_details(id)
@@ -73,15 +76,22 @@ after_initialize do
         item = doc.at_xpath('//item')
         return { error: "Non trouvé" } unless item
         
+        # Récupération des images supplémentaires
+        images = []
+        item.xpath('//image').each do |img|
+          images << img.text
+        end
+        
         {
           id: id,
           name: item.at_xpath('name')&.[]('value'),
           description: item.at_xpath('description')&.text&.gsub(/&amp;/, '&')&.gsub(/&quot;/, '"'),
           image: item.at_xpath('image')&.text,
-          min_players: item.at_xpath('minplayers')&.[]('value'),
-          max_players: item.at_xpath('maxplayers')&.[]('value'),
-          playing_time: item.at_xpath('playingtime')&.[]('value'),
-          min_age: item.at_xpath('minage')&.[]('value'),
+          minplayers: item.at_xpath('minplayers')&.[]('value'),
+          maxplayers: item.at_xpath('maxplayers')&.[]('value'),
+          playingtime: item.at_xpath('playingtime')&.[]('value'),
+          minage: item.at_xpath('minage')&.[]('value'),
+          images: images, # Liste d'images
           videos: []
         }
       end
@@ -105,29 +115,58 @@ after_initialize do
     end
 
     def categories
-      allowed_ids = SiteSetting.game_sheet_allowed_category_ids.to_s.split('|').map(&:to_i)
-      cats = Category.where(id: allowed_ids).map { |c| { id: c.id, name: c.name } }
-      render json: cats
+      allowed_ids = SiteSetting.game_sheet_allowed_category_ids.split('|').map(&:to_i)
+      render json: Category.where(id: allowed_ids).map { |c| { id: c.id, name: c.name } }
     end
 
     def create_topic
       game = DiscourseGameSheet::BggClient.game_details(params[:game_id])
       return render json: { error: game[:error] }, status: 400 if game[:error]
       
-      raw = <<~MARKDOWN
-        # #{game[:name]}
-        ![#{game[:name]}|600](#{game[:image]})
-
-        👤 **Joueurs :** #{game[:min_players]}-#{game[:max_players]} | ⏳ **Durée :** #{game[:playing_time]} min | 🎂 **Âge :** #{game[:min_age]}+
-        [Voir sur BoardGameGeek](https://boardgamegeek.com/boardgame/#{game[:id]})
-
-        ## 📖 Description
-        #{game[:description]}
-        —description fournie par l’éditeur
-      MARKDOWN
+      # Construction du corps du message avec médias sélectionnés
+      raw = String.new
       
-      post = PostCreator.new(current_user, title: "Fiche : #{game[:name]}", raw: raw, category: params[:category_id]).create
-      post&.persisted? ? render(json: { topic_url: post.topic.url }) : render(json: { error: "Erreur création" }, status: 422)
+      # Image principale
+      if params[:include_image] == "true" && game[:image].present?
+        raw << "![#{game[:name]}|600](#{game[:image]})\n\n"
+      end
+      
+      # Images sélectionnées
+      if params[:selected_images].present?
+        raw << "### 🖼️ Images du jeu\n\n"
+        JSON.parse(params[:selected_images]).each do |img_url|
+          raw << "![Image](#{img_url})\n"
+        end
+        raw << "\n"
+      end
+      
+      # Vidéos sélectionnées
+      if params[:selected_videos].present?
+        raw << "### 🎬 Vidéos\n\n"
+        params[:selected_videos].split('|').each do |video_url|
+          raw << "#{video_url}\n"
+        end
+        raw << "\n"
+      end
+      
+      # Informations
+      raw << "# #{game[:name]}\n\n"
+      raw << "👤 **Joueurs :** #{game[:minplayers]}-#{game[:maxplayers]} | ⏳ **Durée :** #{game[:playingtime]} min | 🎂 **Âge :** #{game[:minage]}+\n\n"
+      raw << "[Voir sur BoardGameGeek](https://boardgamegeek.com/boardgame/#{game[:id]})\n\n"
+      raw << "## 📖 Description\n#{game[:description]}\n"
+      
+      post = PostCreator.new(
+        current_user,
+        title: "Fiche : #{game[:name]}",
+        raw: raw,
+        category: params[:category_id]
+      ).create
+      
+      if post&.persisted?
+        render json: { topic_url: post.topic.url }
+      else
+        render json: { error: "Erreur lors de la création du sujet" }, status: 422
+      end
     end
   end
 
