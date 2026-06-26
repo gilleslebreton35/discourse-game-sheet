@@ -2,121 +2,100 @@ import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
 import { on } from "@ember/modifier";
-import { service } from "@ember/service";
+import { debounce } from "@ember/runloop";
 import { ajax } from "discourse/lib/ajax";
-import { popupAjaxError } from "discourse/lib/ajax-error";
 import { fn } from "@ember/helper";
 
 export default class GameSheetMain extends Component {
-  @service site; // Utilisation du service site natif
-
   @tracked query = "";
   @tracked results = [];
-  @tracked loading = false;
   @tracked selectedGame = null;
-  @tracked loadingDetails = false;
+  @tracked selectedImages = [];
+  @tracked selectedVideos = [];
+  @tracked categories = [];
   @tracked destinationCategory = "";
-  @tracked creating = false;
-
-  // On récupère les catégories via le service 'site' de Discourse
-  get availableCategories() {
-    return this.site.categories || [];
-  }
-
-  @action updateQuery(event) { this.query = event.target.value; }
-  @action updateCategory(event) { this.destinationCategory = event.target.value; }
 
   @action
-  async searchGames() {
-    if (!this.query) return;
-    this.loading = true;
-    try {
-      const response = await ajax(`/game-sheet-api/search?q=${encodeURIComponent(this.query)}`);
-      this.results = response.bgg || [];
-    } catch (e) {
-      popupAjaxError(e);
-    } finally {
-      this.loading = false;
-    }
+  updateQuery(event) {
+    this.query = event.target.value;
+    debounce(this, this.performSearch, 500);
+  }
+
+  async performSearch() {
+    if (this.query.length < 3) return;
+    const res = await ajax(`/game-sheet-api/search?q=${encodeURIComponent(this.query)}`);
+    this.results = res.bgg || [];
   }
 
   @action
   async selectGame(gameId) {
-    this.loadingDetails = true;
-    try {
-      this.selectedGame = await ajax(`/game-sheet-api/details/${gameId}`);
-    } catch (e) {
-      popupAjaxError(e);
-    } finally {
-      this.loadingDetails = false;
+    this.selectedGame = await ajax(`/game-sheet-api/details/${gameId}`);
+    this.categories = await ajax("/game-sheet-api/categories");
+    this.selectedImages = [];
+    this.selectedVideos = [];
+  }
+
+  @action
+  toggleSelection(list, item) {
+    if (list.includes(item)) {
+      return list.filter(i => i !== item);
+    } else {
+      return [...list, item];
     }
   }
 
   @action
   async submitTopic() {
-    if (!this.destinationCategory) {
-      alert("Veuillez sélectionner une catégorie.");
-      return;
-    }
-    this.creating = true;
-    try {
-      const res = await ajax("/game-sheet-api/create-topic", {
-        type: "POST",
-        data: {
-          game_id: this.selectedGame.id,
-          category_id: this.destinationCategory
-        }
-      });
-      window.location.href = res.topic_url;
-    } catch (e) {
-      popupAjaxError(e);
-    } finally {
-      this.creating = false;
-    }
+    const res = await ajax("/game-sheet-api/create-topic", {
+      type: "POST",
+      data: {
+        game_id: this.selectedGame.id,
+        category_id: this.destinationCategory,
+        images: this.selectedImages,
+        videos: this.selectedVideos
+      }
+    });
+    window.location.href = res.topic_url;
   }
 
   <template>
-    <div class="wrap" style="padding: 20px;">
-      <h1>Créateur de Fiches</h1>
-      <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-        <input type="text" placeholder="Rechercher..." value={{this.query}} {{on "input" this.updateQuery}} />
-        <button type="button" class="btn btn-primary" {{on "click" this.searchGames}}>
-          {{if this.loading "..." "Rechercher"}}
-        </button>
-      </div>
+    <div style="padding:20px;">
+      <h1>Créateur de fiches</h1>
+      <input type="text" placeholder="Rechercher..." {{on "input" this.updateQuery}} />
 
-      {{#if this.results.length}}
-        <ul style="list-style: none; padding: 0;">
-          {{#each this.results as |game|}}
-            <li style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px; border-bottom: 1px solid #444; padding: 5px;">
-              {{#if game.image}}<img src={{game.image}} width="50" alt="" />{{/if}}
-              <div style="flex-grow: 1;">
-                <strong>{{game.name}}</strong> ({{game.yearpublished}})
-              </div>
-              <button type="button" class="btn" {{on "click" (fn this.selectGame game.id)}}>Choisir</button>
-            </li>
-          {{/each}}
-        </ul>
-      {{/if}}
-      
+      {{#each this.results as |game|}}
+        <div style="display:flex; align-items:center; margin:10px 0;">
+          <img src={{game.image}} width="50"/> {{game.name}}
+          <button {{on "click" (fn this.selectGame game.id)}}>Sélectionner</button>
+        </div>
+      {{/each}}
+
       {{#if this.selectedGame}}
-        <div style="margin-top: 30px; border: 1px solid #ddd; padding: 20px;">
-          <h2>{{this.selectedGame.name}}</h2>
-          <img src={{this.selectedGame.image}} width="200" alt="box" />
-          
-          <div style="margin: 15px 0;">
-            <label>Choisir la catégorie :</label>
-            <select {{on "change" this.updateCategory}}>
-              <option value="">-- Sélectionner --</option>
-              {{#each this.availableCategories as |cat|}}
-                <option value={{cat.id}}>{{cat.name}}</option>
-              {{/each}}
-            </select>
-          </div>
+        <div style="border:1px solid #ccc; padding:20px; margin-top:20px;">
+          <h3>Images à inclure</h3>
+          {{#each this.selectedGame.images as |img|}}
+            <label style="margin-right:10px;">
+              <input type="checkbox" {{on "change" (fn (mut this.selectedImages) (this.toggleSelection this.selectedImages img))}} />
+              <img src={{img}} width="80"/>
+            </label>
+          {{/each}}
 
-          <button type="button" class="btn btn-danger" {{on "click" this.submitTopic}} disabled={{this.creating}}>
-            {{if this.creating "Création..." "Créer le sujet"}}
-          </button>
+          <h3>Vidéos FR</h3>
+          {{#each this.selectedGame.videos as |vid|}}
+            <div>
+              <input type="checkbox" {{on "change" (fn (mut this.selectedVideos) (this.toggleSelection this.selectedVideos vid))}} />
+              {{vid.title}}
+            </div>
+          {{/each}}
+
+          <select {{on "change" (fn (mut this.destinationCategory) target.value)}}>
+            <option value="">Choisir une catégorie</option>
+            {{#each this.categories as |cat|}}
+              <option value={{cat.id}}>{{cat.name}}</option>
+            {{/each}}
+          </select>
+
+          <button {{on "click" this.submitTopic}}>Créer le topic</button>
         </div>
       {{/if}}
     </div>
