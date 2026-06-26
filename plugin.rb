@@ -40,13 +40,23 @@ after_initialize do
           encoded_query = ERB::Util.url_encode(query.to_s.strip)
           resp = request_bgg("search?query=#{encoded_query}&type=boardgame")
           
-          return { bgg: [] } if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
+          # DEBUG : Affiche la réponse dans les logs si c'est vide
+          if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
+             Rails.logger.warn("BGG SEARCH: Erreur réseau ou API")
+             return { bgg: [] }
+          end
           
+          # Log la réponse brute pour voir ce que BGG envoie
+          Rails.logger.warn("BGG RAW RESPONSE: #{resp.body[0..500]}") 
+
           doc = Nokogiri::XML(resp.body)
           items = doc.xpath('//item')
-          return { bgg: [] } if items.empty?
+          
+          if items.empty?
+            Rails.logger.warn("BGG SEARCH: Aucun item trouvé avec le XPath //item")
+            return { bgg: [] }
+          end
 
-          # On prend les 10 premiers résultats
           results = items.first(10).map do |item|
             {
               id: item['id'],
