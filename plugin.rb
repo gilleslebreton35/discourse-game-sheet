@@ -4,11 +4,14 @@
 # authors: Ton Nom
 # url: https://github.com/ton-pseudo/discourse-game-sheet
 
+# Ce paramètre lie ton plugin à la configuration active dans l'admin
 enabled_site_setting :game_sheet_enabled
 
-# register_asset "stylesheets/game-sheet.scss" # Commenté pour éviter l'erreur de compilation au rebuild
+# Enregistrement de la feuille de style
+register_asset "stylesheets/game-sheet.scss"
 
 after_initialize do
+  # 1. Définition du module pour l'API
   module ::DiscourseGameSheet
     class Engine < ::Rails::Engine
       engine_name "discourse_game_sheet"
@@ -16,22 +19,23 @@ after_initialize do
     end
   end
 
-  # Chargement des fichiers manuellement
+  # 2. Chargement des fichiers serveurs
   load File.expand_path("../app/services/discourse_game_sheet/bgg_client.rb", __FILE__)
   load File.expand_path("../app/services/discourse_game_sheet/deepl_client.rb", __FILE__)
   load File.expand_path("../app/controllers/discourse_game_sheet/game_sheet_controller.rb", __FILE__)
 
+  # 3. Routes de l'API (montées sous /game-sheet-api/...)
   DiscourseGameSheet::Engine.routes.draw do
     get "/search" => "game_sheet#search"
     get "/details" => "game_sheet#details"
     post "/create-topic" => "game_sheet#create_topic"
   end
 
-  # On dit à Discourse : 
-  # 1. De charger la coquille vide pour /game-sheet (Ember prendra le relais)
-  # 2. De monter notre API backend sous /game-sheet-api
+  # 4. Route principale (SPA)
+  # 'list#index' est le contrôleur standard qui charge l'application Ember (Discourse).
+  # Ensuite, ton routeur Ember prendra le relais pour afficher ton composant.
   Discourse::Application.routes.append do
-    get "/game-sheet" => "default#empty"
+    get "/game-sheet" => "list#index"
     mount ::DiscourseGameSheet::Engine, at: "/game-sheet-api"
   end
 end
