@@ -71,25 +71,33 @@ after_initialize do
       end
 
       def self.game_details(id)
-        resp = request_bgg("thing?id=#{id}&stats=1")
+        # On demande les statistiques ET les vidéos avec &stats=1&videos=1
+        resp = request_bgg("thing?id=#{id}&stats=1&videos=1")
         return { error: "Non trouvé" } if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
         
         doc = Nokogiri::XML(resp.body)
         item = doc.at_xpath('//item')
         return { error: "Non trouvé" } unless item
         
+        # Extraction des vidéos (limité aux 5 premières)
+        videos = doc.xpath('//video').first(5).map do |v|
+          {
+            title: v['title'],
+            link: v['link']
+          }
+        end
+        
         {
           id: id,
           name: item.at_xpath('name')&.[]('value'),
           description: item.at_xpath('description')&.text&.gsub(/&amp;/, '&'),
           image: item.at_xpath('image')&.text,
-          # Les clés ci-dessous DOIVENT correspondre à ce qu'il y a dans ton .gjs
           minplayers: item.at_xpath('minplayers')&.[]('value'),
           maxplayers: item.at_xpath('maxplayers')&.[]('value'),
           playingtime: item.at_xpath('playingtime')&.[]('value'),
           minage: item.at_xpath('minage')&.[]('value'),
-          images: [item.at_xpath('image')&.text].compact, # Pour éviter l'erreur sur .length
-          videos: []
+          images: [item.at_xpath('image')&.text].compact,
+          videos: videos # On transmet les vidéos ici
         }
       end
     end
