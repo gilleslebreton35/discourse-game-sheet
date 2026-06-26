@@ -2,11 +2,6 @@ import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
 import { on } from "@ember/modifier";
-import { fn } from "@ember/helper";
-import { eq, not } from "@ember/helper";
-import { debounce } from "@ember/runloop";
-import { ajax } from "discourse/lib/ajax";
-import { popupAjaxError } from "discourse/lib/ajax-error";
 
 export default class GameSheetMain extends Component {
   @tracked query = "";
@@ -19,10 +14,12 @@ export default class GameSheetMain extends Component {
   @tracked selectedVideos = [];
   @tracked loading = false;
   @tracked creating = false;
+  @tracked searchLimit = 10; // ← Ajouté : limite initiale
 
   @action
   updateQuery(event) {
     this.query = event.target.value;
+    this.searchLimit = 10; // ← Reset la limite quand on retape
     debounce(this, this.performSearch, 500);
   }
 
@@ -38,6 +35,14 @@ export default class GameSheetMain extends Component {
     } finally {
       this.loading = false;
     }
+  }
+
+  @action
+  expandSearch() {
+    // On augmente la limite pour afficher plus de résultats
+    this.searchLimit = this.searchLimit + 20;
+    // On force un rafraîchissement de l'affichage
+    this.results = this.results;
   }
 
   @action
@@ -85,6 +90,11 @@ export default class GameSheetMain extends Component {
   }
 
   @action
+  toggleIncludeImage(event) {
+    this.includeImage = event.target.checked;
+  }
+
+  @action
   async createTopic() {
     if (!this.destinationCategory) {
       alert("Veuillez sélectionner une catégorie");
@@ -127,24 +137,42 @@ export default class GameSheetMain extends Component {
       {{/if}}
 
       {{#if this.results.length}}
-        <div>
-          {{#each this.results as |game|}}
-            <div style="padding:10px; border-bottom:1px solid #eee; display:flex; align-items:center; gap:15px;">
+        {{! Affiche les résultats selon la limite }}
+        {{#each this.results.slice(0, this.searchLimit) as |game|}}
+          <div style="padding:10px; border-bottom:1px solid #eee; display:flex; align-items:center; gap:15px;">
+            {{! Image du jeu à gauche }}
+            <div style="width:60px; height:60px; flex-shrink:0; border-radius:5px; overflow:hidden; background:#f0f0f0; display:flex; align-items:center; justify-content:center;">
               {{#if game.thumbnail}}
-                <img src={{game.thumbnail}} alt="" style="width:50px; height:50px; object-fit:cover; border-radius:5px;" />
+                <img src={{game.thumbnail}} alt="" 
+                     style="width:100%; height:100%; object-fit:cover;" />
+              {{else}}
+                <span style="font-size:24px; color:#ccc;">🎲</span>
               {{/if}}
-              <div style="flex:1;">
-                <strong>{{game.name}}</strong>
-                {{#if game.yearpublished}}
-                  <span style="color:#888;">({{game.yearpublished}})</span>
-                {{/if}}
-              </div>
-              <button type="button" data-id={{game.id}} {{on "click" this.selectGame}} class="btn btn-primary btn-small">
-                Choisir
-              </button>
             </div>
-          {{/each}}
-        </div>
+            {{! Infos du jeu }}
+            <div style="flex:1;">
+              <strong>{{game.name}}</strong>
+              {{#if game.yearpublished}}
+                <span style="color:#888; margin-left:8px;">({{game.yearpublished}})</span>
+              {{/if}}
+            </div>
+            {{! Bouton Choisir }}
+            <button type="button" data-id={{game.id}} {{on "click" this.selectGame}} 
+                    class="btn btn-primary btn-small">
+              Choisir
+            </button>
+          </div>
+        {{/each}}
+
+        {{! Bouton pour élargir la recherche }}
+        {{#if (gt this.results.length this.searchLimit)}}
+          <div style="text-align:center; margin-top:15px;">
+            <button type="button" {{on "click" this.expandSearch}} 
+                    class="btn btn-default">
+              🔍 Afficher plus de résultats ({{this.results.length - this.searchLimit}} supplémentaires)
+            </button>
+          </div>
+        {{/if}}
       {{/if}}
 
       {{#if this.selectedGame}}
