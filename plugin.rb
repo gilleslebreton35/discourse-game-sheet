@@ -79,11 +79,13 @@ after_initialize do
           name: item.at_xpath('name')&.[]('value'),
           description: item.at_xpath('description')&.text&.gsub(/&amp;/, '&'),
           image: item.at_xpath('image')&.text,
-          min_players: item.at_xpath('minplayers')&.[]('value'),
-          max_players: item.at_xpath('maxplayers')&.[]('value'),
-          playing_time: item.at_xpath('playingtime')&.[]('value'),
-          min_age: item.at_xpath('minage')&.[]('value'),
-          videos: [] # Correction : définition du tableau vide pour éviter les erreurs
+          # Les clés ci-dessous DOIVENT correspondre à ce qu'il y a dans ton .gjs
+          minplayers: item.at_xpath('minplayers')&.[]('value'),
+          maxplayers: item.at_xpath('maxplayers')&.[]('value'),
+          playingtime: item.at_xpath('playingtime')&.[]('value'),
+          minage: item.at_xpath('minage')&.[]('value'),
+          images: [item.at_xpath('image')&.text].compact, # Pour éviter l'erreur sur .length
+          videos: []
         }
       end
     end
