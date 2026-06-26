@@ -3,11 +3,11 @@ plugins:
     default: true
     client: true
   game_sheet_bgg_token:
-    default: ""
+    default: "a904f3bf-f154-4890-9618-4dc3835e40c7"
   game_sheet_deepl_api_key:
     default: ""
   game_sheet_allowed_group:
-    default: "trust_level_1" # Change par le nom de ton groupe d'abonnés (ex: "subscribers")
+    default: "trust_level_1"
     client: true
   game_sheet_allowed_category_ids:
-    default: "1|2|3"
+    default: "4|9|15"
