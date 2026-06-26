@@ -1,6 +1,6 @@
 # name: discourse-game-sheet
 # about: Plugin pour créer des fiches de jeux depuis BGG
-# version: 0.3
+# version: 0.4
 # authors: Toi
 
 enabled_site_setting :game_sheet_enabled
@@ -13,7 +13,6 @@ after_initialize do
 
   module DiscourseGameSheet
     class BggClient
-      # Ton token
       BGG_TOKEN = "a904f3bf-f154-4890-9618-4dc3835e40c7"
 
       def self.search(query)
@@ -25,18 +24,21 @@ after_initialize do
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
         request = Net::HTTP::Get.new(uri.request_uri)
-        
-        # Identification et Token
-        request["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Discourse-GameSheet"
+        request["User-Agent"] = "Mozilla/5.0 (Discourse-GameSheet)"
         request["Authorization"] = "Bearer #{BGG_TOKEN}"
 
         begin
           response = http.request(request)
-          
           if response.is_a?(Net::HTTPSuccess)
             doc = Nokogiri::XML(response.body)
             results = doc.xpath('//item').map do |item|
-              { id: item['id'], name: item.at_xpath('name')&.[]('value') }
+              # On récupère l'année pour l'affichage dans le frontend
+              year_node = item.at_xpath('yearpublished')
+              { 
+                id: item['id'], 
+                name: item.at_xpath('name')&.[]('value'),
+                yearpublished: year_node ? year_node['value'] : "N/A"
+              }
             end
             { bgg: results.first(10) }
           else
@@ -49,13 +51,10 @@ after_initialize do
 
       def self.game_details(id)
         uri = URI.parse("https://boardgamegeek.com/xmlapi2/thing?id=#{id}&stats=1")
-        
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
         request = Net::HTTP::Get.new(uri.request_uri)
-        
-        # Identification et Token
-        request["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Discourse-GameSheet"
+        request["User-Agent"] = "Mozilla/5.0 (Discourse-GameSheet)"
         request["Authorization"] = "Bearer #{BGG_TOKEN}"
 
         begin
@@ -81,11 +80,10 @@ after_initialize do
     end
   end
 
-  # Contrôleur
   class ::GameSheetController < ::ApplicationController
     requires_plugin "discourse-game-sheet"
     before_action :ensure_logged_in
-    skip_before_action :check_xhr, only: [:index, :search, :details]
+    skip_before_action :check_xhr, only: [:index, :search, :details, :categories]
 
     def index
       render html: "", layout: true
@@ -99,6 +97,11 @@ after_initialize do
       render json: DiscourseGameSheet::BggClient.game_details(params[:id])
     end
 
+    # NOUVEAU : Endpoint pour lister les catégories disponibles
+    def categories
+      render json: Category.listable_categories(current_user).map { |c| { id: c.id, name: c.name } }
+    end
+
     def create_topic
       game = DiscourseGameSheet::BggClient.game_details(params[:game_id])
       return render json: { error: game[:error] }, status: 400 if game[:error]
@@ -107,15 +110,15 @@ after_initialize do
       raw = "#{image_markdown}### Description\n#{game[:description]}"
       
       post = PostCreator.new(current_user, title: "Fiche : #{game[:name]}", raw: raw, category: params[:category_id]).create
-      post&.persisted? ? render(json: { topic_url: post.topic.url }) : render(json: { error: "Erreur" }, status: 422)
+      post&.persisted? ? render(json: { topic_url: post.topic.url }) : render(json: { error: "Erreur lors de la création du sujet" }, status: 422)
     end
   end
 
-  # Routes
   Discourse::Application.routes.append do
     get "/game-sheet" => "game_sheet#index"
     get "/game-sheet-api/search" => "game_sheet#search"
     get "/game-sheet-api/details/:id" => "game_sheet#details"
+    get "/game-sheet-api/categories" => "game_sheet#categories" # Nouvelle route
     post "/game-sheet-api/create-topic" => "game_sheet#create_topic"
   end
 end
