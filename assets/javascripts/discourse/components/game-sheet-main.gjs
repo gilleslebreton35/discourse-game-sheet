@@ -4,7 +4,7 @@ import { action } from "@ember/object";
 import { on } from "@ember/modifier";
 import { debounce } from "@ember/runloop";
 import { ajax } from "discourse/lib/ajax";
-import { eq } from "discourse/helpers/eq"; // <-- IMPORTANT : Import manquant
+import { eq } from "discourse/helpers/eq";
 
 export default class GameSheetMain extends Component {
   @tracked query = "";
@@ -30,7 +30,6 @@ export default class GameSheetMain extends Component {
   async selectGame(event) {
     const gameId = event.target.dataset.id;
     this.selectedGame = await ajax(`/game-sheet-api/details/${gameId}`);
-    console.log("Données reçues du jeu :", this.selectedGame); // Pour déboguer
     this.categories = await ajax("/game-sheet-api/categories");
   }
 
@@ -85,7 +84,8 @@ export default class GameSheetMain extends Component {
           <select {{on "change" this.updateCategory}}>
             <option value="">Choisir une catégorie</option>
             {{#each this.categories as |cat|}}
-              <option value={{cat.id}} selected={{eq (number cat.id) (number this.destinationCategory)}}>
+              {{!-- Correction ici : suppression du helper 'number' --}}
+              <option value={{cat.id}} selected={{eq cat.id this.destinationCategory}}>
                 {{cat.name}}
               </option>
             {{/each}}
