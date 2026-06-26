@@ -1,108 +1,108 @@
-import Component from "@glimmer/component";
-import { tracked } from "@glimmer/tracking";
-import { action } from "@ember/object";
-import { on } from "@ember/modifier";
-import { service } from "@ember/service";
-import { ajax } from "discourse/lib/ajax";
-import { popupAjaxError } from "discourse/lib/ajax-error";
-import { fn } from "@ember/helper";
+# name: discourse-game-sheet
+# about: Plugin pour créer des fiches de jeux depuis BGG
+# version: 0.1
+# authors: Toi
 
-export default class GameSheetMain extends Component {
-  @service siteSettings;
+enabled_site_setting :game_sheet_enabled
 
-  @tracked query = "";
-  @tracked results = [];
-  @tracked loading = false;
-  @tracked selectedGame = null;
-  @tracked loadingDetails = false;
-  @tracked destinationCategory = "";
-  @tracked includeImage = true;
-  @tracked selectedVideos = [];
-  @tracked creating = false;
+after_initialize do
+  # 1. Enregistrement des assets (CSS/JS)
+  register_asset "javascripts/discourse/components/game-sheet-main.gjs"
+  register_asset "javascripts/discourse/templates/game-sheet.hbs"
 
-  get availableCategories() {
-    return this.siteSettings.categories || [];
-  }
+  require_dependency "application_controller"
 
-  @action updateQuery(event) { this.query = event.target.value; }
-  @action updateIncludeImage(event) { this.includeImage = event.target.checked; }
-  @action updateCategory(event) { this.destinationCategory = event.target.value; }
+  # 2. Logiciel d'interaction API (BGG Client)
+  module DiscourseGameSheet
+    class BggClient
+      require 'nokogiri'
+      require 'open-uri'
 
-  @action
-  async searchGames() {
-    if (!this.query) return;
-    this.loading = true;
-    this.results = [];
-    try {
-      const response = await ajax(`/game-sheet-api/search?q=${encodeURIComponent(this.query)}`);
-      // Correction ici : Utilisation de response.bgg
-      this.results = response.bgg || [];
-    } catch (e) {
-      popupAjaxError(e);
-    } finally {
-      this.loading = false;
-    }
-  }
+      # Recherche les jeux par nom
+      def self.search(query)
+        # Appel API BGG XML
+        encoded_query = ERB::Util.url_encode(query)
+        url = "https://boardgamegeek.com/xmlapi2/search?query=#{encoded_query}&type=boardgame"
+        
+        doc = Nokogiri::XML(URI.open(url).read)
+        
+        # Mapping du XML vers un objet Ruby
+        results = doc.xpath('//item').map do |item|
+          {
+            id: item['id'],
+            name: item.at_xpath('name')['value'],
+            yearpublished: item.at_xpath('yearpublished') ? item.at_xpath('yearpublished')['value'] : "N/A"
+          }
+        end
+        { bgg: results.first(10) }
+      rescue => e
+        Rails.logger.error("Erreur BGG Search: #{e.message}")
+        { bgg: [] }
+      end
 
-  @action
-  async selectGame(gameId) {
-    this.loadingDetails = true;
-    try {
-      this.selectedGame = await ajax(`/game-sheet-api/details/${gameId}`);
-    } catch (e) {
-      popupAjaxError(e);
-    } finally {
-      this.loadingDetails = false;
-    }
-  }
-
-  @action
-  async submitTopic() {
-    if (!this.destinationCategory) {
-      alert("Veuillez sélectionner une catégorie.");
-      return;
-    }
-    this.creating = true;
-    try {
-      const res = await ajax("/game-sheet-api/create-topic", {
-        type: "POST",
-        data: {
-          game_id: this.selectedGame.id,
-          category_id: this.destinationCategory,
-          include_image: this.includeImage,
-          selected_videos: this.selectedVideos
+      # Récupère les détails d'un jeu
+      def self.game_details(id)
+        url = "https://boardgamegeek.com/xmlapi2/thing?id=#{id}&stats=1"
+        doc = Nokogiri::XML(URI.open(url).read)
+        item = doc.at_xpath('//item')
+        
+        {
+          id: id,
+          name: item.at_xpath('name')['value'],
+          description: item.at_xpath('description').text.gsub(/&amp;/, '&'), # Nettoyage HTML
+          image: item.at_xpath('image') ? item.at_xpath('image').text : nil,
+          yearpublished: item.at_xpath('yearpublished')['value']
         }
-      });
-      window.location.href = res.topic_url;
-    } catch (e) {
-      popupAjaxError(e);
-    } finally {
-      this.creating = false;
-    }
-  }
+      end
+    end
+  end
 
-  <template>
-    <div class="wrap" style="padding: 20px;">
-      <h1>Créateur de Fiches</h1>
-      <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-        <input type="text" placeholder="Rechercher un jeu..." value={{this.query}} {{on "input" this.updateQuery}} />
-        <button type="button" class="btn btn-primary" {{on "click" this.searchGames}}>
-          {{if this.loading "..." "Rechercher"}}
-        </button>
-      </div>
+  # 3. Contrôleur de l'API
+  class ::GameSheetController < ::ApplicationController
+    requires_plugin "discourse-game-sheet"
+    before_action :ensure_logged_in
 
-      {{#if this.results.length}}
-        <ul>
-          {{#each this.results as |game|}}
-            <li>{{game.name}} <button type="button" {{on "click" (fn this.selectGame game.id)}}>Choisir</button></li>
-          {{/each}}
-        </ul>
-      {{/if}}
+    def index
+      render html: "", layout: true
+    end
+
+    def search
+      render json: DiscourseGameSheet::BggClient.search(params[:q])
+    end
+
+    def details
+      render json: DiscourseGameSheet::BggClient.game_details(params[:id])
+    end
+
+    def create_topic
+      # Logique de création de sujet
+      game = DiscourseGameSheet::BggClient.game_details(params[:game_id])
       
-      {{#if this.selectedGame}}
-        <h2>{{this.selectedGame.name}}</h2>
-        <button type="button" class="btn btn-danger" {{on "click" this.submitTopic}}>Créer le sujet</button>
-      {{/if}}
-    </div>
-  </template>
-}
+      # Exemple de corps de message
+      raw = "![image|600](#{game[:image]})\n\n### Description\n#{game[:description]}"
+      
+      post_creator = PostCreator.new(
+        current_user, 
+        title: "Fiche : #{game[:name]}", 
+        raw: raw, 
+        category: params[:category_id]
+      )
+      
+      post = post_creator.create
+      
+      if post.persisted?
+        render json: { topic_url: post.topic.url }
+      else
+        render json: { error: "Erreur lors de la création" }, status: 422
+      end
+    end
+  end
+
+  # 4. Routes
+  Discourse::Application.routes.append do
+    get "/game-sheet" => "game_sheet#index"
+    get "/game-sheet-api/search" => "game_sheet#search"
+    get "/game-sheet-api/details/:id" => "game_sheet#details"
+    post "/game-sheet-api/create-topic" => "game_sheet#create_topic"
+  end
+end
