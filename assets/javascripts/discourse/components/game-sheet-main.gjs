@@ -26,16 +26,18 @@ export default class GameSheetMain extends Component {
     this.results = res.bgg || [];
   }
 
-  // MODIFICATION ICI : On récupère l'ID depuis l'attribut data-id
   @action
   async selectGame(event) {
+    // On récupère l'ID via l'attribut HTML data-id
     const gameId = event.target.dataset.id;
     this.selectedGame = await ajax(`/game-sheet-api/details/${gameId}`);
     this.categories = await ajax("/game-sheet-api/categories");
   }
 
   @action
-  toggleImage(img, event) {
+  toggleImage(event) {
+    // On récupère l'URL via l'attribut HTML data-img
+    const img = event.target.dataset.img;
     if (event.target.checked) {
       this.selectedImages = [...this.selectedImages, img];
     } else {
@@ -44,7 +46,9 @@ export default class GameSheetMain extends Component {
   }
 
   @action
-  toggleVideo(vid, event) {
+  toggleVideo(event) {
+    // On récupère le titre/ID via l'attribut HTML data-vid
+    const vid = event.target.dataset.vid;
     if (event.target.checked) {
       this.selectedVideos = [...this.selectedVideos, vid];
     } else {
@@ -80,7 +84,6 @@ export default class GameSheetMain extends Component {
       {{#each this.results as |game|}}
         <div style="margin:10px 0;">
           {{game.name}} 
-          {{!-- On remplace (fn ...) par un simple attribut data-id --}}
           <button type="button" data-id={{game.id}} {{on "click" this.selectGame}}>Choisir</button>
         </div>
       {{/each}}
@@ -90,7 +93,8 @@ export default class GameSheetMain extends Component {
           <h3>Images :</h3>
           {{#each this.selectedGame.images as |img|}}
             <label>
-              <input type="checkbox" {{on "change" (fn this.toggleImage img)}} /> 
+              {{!-- On passe img via data-img --}}
+              <input type="checkbox" data-img={{img}} {{on "change" this.toggleImage}} /> 
               <img src={{img}} width="50" alt="game-art"/>
             </label>
           {{/each}}
@@ -98,7 +102,8 @@ export default class GameSheetMain extends Component {
           <h3>Vidéos :</h3>
           {{#each this.selectedGame.videos as |vid|}}
             <label>
-              <input type="checkbox" {{on "change" (fn this.toggleVideo vid)}} /> 
+              {{!-- On passe le titre via data-vid --}}
+              <input type="checkbox" data-vid={{vid.title}} {{on "change" this.toggleVideo}} /> 
               {{vid.title}}
             </label>
           {{/each}}
