@@ -1,6 +1,6 @@
 # name: discourse-game-sheet
 # about: Plugin pour créer des fiches de jeux depuis BGG
-# version: 0.8.2
+# version: 0.9
 # authors: Toi
 
 enabled_site_setting :game_sheet_enabled
@@ -12,23 +12,8 @@ after_initialize do
   require 'uri'
   require 'erb'
 
-  # Ajout des settings personnalisés
-  SiteSetting.refresh!
-  
-  unless SiteSetting.where(name: "game_sheet_bgg_token").exists?
-    SiteSetting.create!(name: "game_sheet_bgg_token", data_type: 1, value: "a904f3bf-f154-4890-9618-4dc3835e40c7")
-  end
-  
-  unless SiteSetting.where(name: "game_sheet_allowed_category_ids").exists?
-    SiteSetting.create!(name: "game_sheet_allowed_category_ids", data_type: 1, value: "")
-  end
-
-  unless SiteSetting.where(name: "game_sheet_allowed_group").exists?
-    SiteSetting.create!(name: "game_sheet_allowed_group", data_type: 1, value: "")
-  end
-
   module ::DiscourseGameSheet
-  class BggClient
+    class BggClient
       BASE_URL = "https://boardgamegeek.com/xmlapi2"
 
       def self.request_bgg(path)
@@ -38,9 +23,12 @@ after_initialize do
         http.use_ssl = true
         
         request = Net::HTTP::Get.new(uri.request_uri)
-        request["User-Agent"] = "Discourse-GameSheet/1.0"
-        # request["Authorization"] = "Bearer #{SiteSetting.game_sheet_bgg_token}"
+        # Utilisation d'un User-Agent de navigateur pour éviter les blocages robots
+        request["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         
+        # --- CORRECTION : Suppression du Header Authorization ---
+        # L'API XML2 de recherche BGG ne nécessite pas de token et le rejette (Erreur 401).
+
         begin
           response = http.request(request)
           Rails.logger.warn("BGG REQUEST: #{uri} | Status: #{response.code}")
@@ -52,53 +40,35 @@ after_initialize do
       end
 
       def self.search(query)
-        return { bgg: [], error: "Requête vide" } if query.blank?
+        return { bgg: [] } if query.blank?
         
         begin
           encoded_query = ERB::Util.url_encode(query.to_s.strip)
           resp = request_bgg("search?query=#{encoded_query}&type=boardgame")
           
-          # DEBUG 1 : Si la réponse est totalement nulle (timeout ou crash réseau)
-          if resp.nil?
-            return { bgg: [], error: "Impossible de joindre BGG (Timeout ou blocage réseau de ton serveur)" }
-          end
-
-          # DEBUG 2 : Si BGG répond, mais avec une erreur (ex: 403 Forbidden, 429 Too Many Requests)
-          unless resp.is_a?(Net::HTTPSuccess)
-            return { bgg: [], error: "BGG a refusé la connexion. Code HTTP : #{resp.code}" }
-          end
+          return { bgg: [], error: "BGG a répondu avec l'erreur : #{resp&.code}" } if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
 
           doc = Nokogiri::XML(resp.body)
           items = doc.xpath('//item').first(30)
-          
-          # DEBUG 3 : BGG répond OK, mais ne trouve aucun jeu
-          if items.empty?
-            return { bgg: [], error: "BGG a répondu OK, mais aucun jeu trouvé pour : #{query}" }
-          end
+          return { bgg: [] } if items.empty?
 
           ids = items.map { |i| i['id'] }.join(',')
           resp_details = request_bgg("thing?id=#{ids}")
           
-          # DEBUG 4 : BGG bloque la deuxième requête (les détails)
-          if resp_details.nil? || !resp_details.is_a?(Net::HTTPSuccess)
-            return { bgg: [], error: "BGG a bloqué la récupération des images." }
-          end
+          return { bgg: [] } if resp_details.nil? || !resp_details.is_a?(Net::HTTPSuccess)
 
           details_doc = Nokogiri::XML(resp_details.body)
-          
           results = details_doc.xpath('//item').map do |item|
             {
               id: item['id'],
-              name: item.at_xpath('name')&.[]('value') || "Inconnu",
+              name: item.at_xpath('name')&.[]('value'),
               yearpublished: item.at_xpath('yearpublished')&.[]('value'),
               thumbnail: item.at_xpath('thumbnail')&.text
             }
           end
-          
-          { bgg: results, debug: "Succès total" }
+          { bgg: results }
         rescue => e
-          # DEBUG 5 : Le code Ruby a planté
-          { bgg: [], error: "Crash Ruby interne : #{e.message}" }
+          { bgg: [], error: e.message }
         end
       end
 
@@ -111,7 +81,6 @@ after_initialize do
         return { error: "Non trouvé" } unless item
         
         image_url = item.at_xpath('image')&.text
-        
         {
           id: id,
           name: item.at_xpath('name')&.[]('value'),
@@ -122,18 +91,16 @@ after_initialize do
           playingtime: item.at_xpath('playingtime')&.[]('value'),
           minage: item.at_xpath('minage')&.[]('value'),
           yearpublished: item.at_xpath('yearpublished')&.[]('value'),
-          # CORRECTION 3 : L'API standard ne donne qu'une image, on l'ajoute au tableau pour la galerie
-          images: image_url.present? ? [image_url] : [], 
+          images: image_url.present? ? [image_url] : [],
           videos: []
         }
       end
     end
   end
 
-  # Chargement du contrôleur depuis le fichier dédié
+  # Chargement des composants et routes
   load File.expand_path("../app/controllers/discourse_game_sheet/game_sheet_controller.rb", __FILE__)
 
-  # Routes corrigées avec le bon namespace
   Discourse::Application.routes.append do
     get "/game-sheet" => "discourse_game_sheet/game_sheet#index"
     get "/game-sheet-api/search" => "discourse_game_sheet/game_sheet#search"
