@@ -4,13 +4,14 @@ import { action } from "@ember/object";
 import { on } from "@ember/modifier";
 import { debounce } from "@ember/runloop";
 import { ajax } from "discourse/lib/ajax";
+import { eq } from "discourse/helpers/eq"; // <-- IMPORTANT : Import manquant
 
 export default class GameSheetMain extends Component {
   @tracked query = "";
   @tracked results = [];
   @tracked selectedGame = null;
   @tracked categories = [];
-  @tracked destinationCategory = ""; // Assure-toi que c'est bien lié
+  @tracked destinationCategory = "";
 
   @action
   updateQuery(event) {
@@ -29,13 +30,13 @@ export default class GameSheetMain extends Component {
   async selectGame(event) {
     const gameId = event.target.dataset.id;
     this.selectedGame = await ajax(`/game-sheet-api/details/${gameId}`);
+    console.log("Données reçues du jeu :", this.selectedGame); // Pour déboguer
     this.categories = await ajax("/game-sheet-api/categories");
   }
 
   @action
   updateCategory(event) {
     this.destinationCategory = event.target.value;
-    console.log("Catégorie sélectionnée :", this.destinationCategory);
   }
 
   @action
@@ -59,7 +60,6 @@ export default class GameSheetMain extends Component {
       <h1>Créateur de fiches</h1>
       <input type="text" placeholder="Taper pour chercher..." {{on "input" this.updateQuery}} />
 
-      {{!-- Liste de recherche améliorée --}}
       {{#each this.results as |game|}}
         <div style="display:flex; align-items:center; margin:10px 0; border-bottom:1px solid #eee;">
           <img src={{game.image}} width="50" style="margin-right:10px;" alt="vignette" />
@@ -73,14 +73,21 @@ export default class GameSheetMain extends Component {
       {{#if this.selectedGame}}
         <div style="margin-top:20px; padding:20px; border:1px solid #ccc;">
           <h2>{{this.selectedGame.name}}</h2>
-          <img src={{this.selectedGame.image}} width="300" alt="game-cover" />
-          <p>{{{this.selectedGame.description}}}</p>
+          {{#if this.selectedGame.image}}
+            <img src={{this.selectedGame.image}} width="300" alt="game-cover" />
+          {{/if}}
+          
+          <div style="margin: 15px 0;">
+            {{{this.selectedGame.description}}}
+          </div>
 
           <label>Catégorie :</label>
           <select {{on "change" this.updateCategory}}>
-            <option value="">Choisir...</option>
+            <option value="">Choisir une catégorie</option>
             {{#each this.categories as |cat|}}
-              <option value={{cat.id}} selected={{eq this.destinationCategory cat.id}}>{{cat.name}}</option>
+              <option value={{cat.id}} selected={{eq (number cat.id) (number this.destinationCategory)}}>
+                {{cat.name}}
+              </option>
             {{/each}}
           </select>
 
