@@ -4,7 +4,6 @@ import { action } from "@ember/object";
 import { on } from "@ember/modifier";
 import { debounce } from "@ember/runloop";
 import { ajax } from "discourse/lib/ajax";
-import { fn } from "@ember/helper";
 
 export default class GameSheetMain extends Component {
   @tracked query = "";
@@ -18,7 +17,7 @@ export default class GameSheetMain extends Component {
   @action
   updateQuery(event) {
     this.query = event.target.value;
-    debounce(this, this.performSearch, 500); // 500ms d'attente
+    debounce(this, this.performSearch, 500);
   }
 
   async performSearch() {
@@ -34,12 +33,26 @@ export default class GameSheetMain extends Component {
   }
 
   @action
-  toggleSelection(array, item) {
-    if (array.includes(item)) {
-      return array.filter(i => i !== item);
+  toggleImage(img, event) {
+    if (event.target.checked) {
+      this.selectedImages = [...this.selectedImages, img];
     } else {
-      return [...array, item];
+      this.selectedImages = this.selectedImages.filter(i => i !== img);
     }
+  }
+
+  @action
+  toggleVideo(vid, event) {
+    if (event.target.checked) {
+      this.selectedVideos = [...this.selectedVideos, vid];
+    } else {
+      this.selectedVideos = this.selectedVideos.filter(v => v !== vid);
+    }
+  }
+
+  @action
+  updateCategory(event) {
+    this.destinationCategory = event.target.value;
   }
 
   @action
@@ -63,7 +76,8 @@ export default class GameSheetMain extends Component {
 
       {{#each this.results as |game|}}
         <div style="margin:10px 0;">
-          {{game.name}} <button {{on "click" (fn this.selectGame game.id)}}>Choisir</button>
+          {{game.name}} 
+          <button type="button" {{on "click" (fn this.selectGame game.id)}}>Choisir</button>
         </div>
       {{/each}}
 
@@ -71,22 +85,28 @@ export default class GameSheetMain extends Component {
         <div style="margin-top:20px; border-top:1px solid #ccc;">
           <h3>Images :</h3>
           {{#each this.selectedGame.images as |img|}}
-            <label><input type="checkbox" {{on "change" (fn (mut this.selectedImages) (this.toggleSelection this.selectedImages img))}} /> <img src={{img}} width="50"/></label>
+            <label>
+              <input type="checkbox" {{on "change" (fn this.toggleImage img)}} /> 
+              <img src={{img}} width="50" alt="game-art"/>
+            </label>
           {{/each}}
 
           <h3>Vidéos :</h3>
           {{#each this.selectedGame.videos as |vid|}}
-            <label><input type="checkbox" {{on "change" (fn (mut this.selectedVideos) (this.toggleSelection this.selectedVideos vid))}} /> {{vid.title}}</label>
+            <label>
+              <input type="checkbox" {{on "change" (fn this.toggleVideo vid)}} /> 
+              {{vid.title}}
+            </label>
           {{/each}}
 
-          <select {{on "change" (fn (mut this.destinationCategory) target.value)}}>
+          <select {{on "change" this.updateCategory}}>
             <option value="">Choisir la catégorie</option>
             {{#each this.categories as |cat|}}
               <option value={{cat.id}}>{{cat.name}}</option>
             {{/each}}
           </select>
 
-          <button {{on "click" this.submitTopic}}>Créer le sujet</button>
+          <button type="button" {{on "click" this.submitTopic}}>Créer le sujet</button>
         </div>
       {{/if}}
     </div>
