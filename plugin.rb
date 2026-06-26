@@ -52,27 +52,37 @@ after_initialize do
       end
 
       def self.search(query)
-        return { bgg: [] } if query.blank?
+        return { bgg: [], error: "Requête vide" } if query.blank?
         
         begin
           encoded_query = ERB::Util.url_encode(query.to_s.strip)
           resp = request_bgg("search?query=#{encoded_query}&type=boardgame")
           
-          if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
-            return { bgg: [] }
+          # DEBUG 1 : Si la réponse est totalement nulle (timeout ou crash réseau)
+          if resp.nil?
+            return { bgg: [], error: "Impossible de joindre BGG (Timeout ou blocage réseau de ton serveur)" }
+          end
+
+          # DEBUG 2 : Si BGG répond, mais avec une erreur (ex: 403 Forbidden, 429 Too Many Requests)
+          unless resp.is_a?(Net::HTTPSuccess)
+            return { bgg: [], error: "BGG a refusé la connexion. Code HTTP : #{resp.code}" }
           end
 
           doc = Nokogiri::XML(resp.body)
-          # CORRECTION 1 : On prend les 30 premiers pour que le bouton "Afficher plus" (limite 10) apparaisse
-          items = doc.xpath('//item').first(30) 
+          items = doc.xpath('//item').first(30)
           
-          return { bgg: [] } if items.empty?
+          # DEBUG 3 : BGG répond OK, mais ne trouve aucun jeu
+          if items.empty?
+            return { bgg: [], error: "BGG a répondu OK, mais aucun jeu trouvé pour : #{query}" }
+          end
 
-          # CORRECTION 2 : On fait une requête /thing pour obtenir les miniatures (images)
           ids = items.map { |i| i['id'] }.join(',')
           resp_details = request_bgg("thing?id=#{ids}")
           
-          return { bgg: [] } if resp_details.nil? || !resp_details.is_a?(Net::HTTPSuccess)
+          # DEBUG 4 : BGG bloque la deuxième requête (les détails)
+          if resp_details.nil? || !resp_details.is_a?(Net::HTTPSuccess)
+            return { bgg: [], error: "BGG a bloqué la récupération des images." }
+          end
 
           details_doc = Nokogiri::XML(resp_details.body)
           
@@ -81,14 +91,14 @@ after_initialize do
               id: item['id'],
               name: item.at_xpath('name')&.[]('value') || "Inconnu",
               yearpublished: item.at_xpath('yearpublished')&.[]('value'),
-              thumbnail: item.at_xpath('thumbnail')&.text # Maintenant on a la miniature !
+              thumbnail: item.at_xpath('thumbnail')&.text
             }
           end
           
-          { bgg: results }
+          { bgg: results, debug: "Succès total" }
         rescue => e
-          Rails.logger.error("BGG SEARCH CRASH: #{e.message}")
-          { bgg: [] }
+          # DEBUG 5 : Le code Ruby a planté
+          { bgg: [], error: "Crash Ruby interne : #{e.message}" }
         end
       end
 
