@@ -1,111 +1,108 @@
-# name: discourse-game-sheet
-# about: Plugin pour créer des fiches de jeux
-# version: 0.1
-# authors: Toi
+import Component from "@glimmer/component";
+import { tracked } from "@glimmer/tracking";
+import { action } from "@ember/object";
+import { on } from "@ember/modifier";
+import { service } from "@ember/service";
+import { ajax } from "discourse/lib/ajax";
+import { popupAjaxError } from "discourse/lib/ajax-error";
+import { fn } from "@ember/helper";
 
-enabled_site_setting :game_sheet_enabled
+export default class GameSheetMain extends Component {
+  @service siteSettings;
 
-after_initialize do
-  require_dependency "application_controller"
+  @tracked query = "";
+  @tracked results = [];
+  @tracked loading = false;
+  @tracked selectedGame = null;
+  @tracked loadingDetails = false;
+  @tracked destinationCategory = "";
+  @tracked includeImage = true;
+  @tracked selectedVideos = [];
+  @tracked creating = false;
 
-  # Structure du module pour tes services API
-  module DiscourseGameSheet
-    class BggClient
-      def self.search(query)
-        # REMPLACE CE CODE PAR TA LOGIQUE BGG (Faraday, XML, etc.)
-        { bgg: [{ id: 1, name: "Catan (Test)", thumbnail: "", yearpublished: "1995" }] }
-      end
+  get availableCategories() {
+    return this.siteSettings.categories || [];
+  }
 
-      def self.game_details(id)
-        # REMPLACE CE CODE PAR TA LOGIQUE BGG
-        { id: id, name: "Catan", description: "Jeu de stratégie...", image: "", minplayers: 3, maxplayers: 4, playingtime: 60, minage: 10 }
-      end
-    end
+  @action updateQuery(event) { this.query = event.target.value; }
+  @action updateIncludeImage(event) { this.includeImage = event.target.checked; }
+  @action updateCategory(event) { this.destinationCategory = event.target.value; }
 
-    class DeeplClient
-      def self.translate(text)
-        # REMPLACE CE CODE PAR TA LOGIQUE DEEPL
-        text
-      end
-    end
-  end
+  @action
+  async searchGames() {
+    if (!this.query) return;
+    this.loading = true;
+    this.results = [];
+    try {
+      const response = await ajax(`/game-sheet-api/search?q=${encodeURIComponent(this.query)}`);
+      // Correction ici : Utilisation de response.bgg
+      this.results = response.bgg || [];
+    } catch (e) {
+      popupAjaxError(e);
+    } finally {
+      this.loading = false;
+    }
+  }
 
-  class ::GameSheetController < ::ApplicationController
-    requires_plugin "discourse-game-sheet"
-    before_action :ensure_logged_in
-    before_action :ensure_allowed_group, except: [:index]
+  @action
+  async selectGame(gameId) {
+    this.loadingDetails = true;
+    try {
+      this.selectedGame = await ajax(`/game-sheet-api/details/${gameId}`);
+    } catch (e) {
+      popupAjaxError(e);
+    } finally {
+      this.loadingDetails = false;
+    }
+  }
 
-    def index
-      render html: "", layout: true
-    end
+  @action
+  async submitTopic() {
+    if (!this.destinationCategory) {
+      alert("Veuillez sélectionner une catégorie.");
+      return;
+    }
+    this.creating = true;
+    try {
+      const res = await ajax("/game-sheet-api/create-topic", {
+        type: "POST",
+        data: {
+          game_id: this.selectedGame.id,
+          category_id: this.destinationCategory,
+          include_image: this.includeImage,
+          selected_videos: this.selectedVideos
+        }
+      });
+      window.location.href = res.topic_url;
+    } catch (e) {
+      popupAjaxError(e);
+    } finally {
+      this.creating = false;
+    }
+  }
 
-    def search
-      begin
-        params.require(:q)
-        render json: DiscourseGameSheet::BggClient.search(params[:q])
-      rescue => e
-        render_error(e)
-      end
-    end
+  <template>
+    <div class="wrap" style="padding: 20px;">
+      <h1>Créateur de Fiches</h1>
+      <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+        <input type="text" placeholder="Rechercher un jeu..." value={{this.query}} {{on "input" this.updateQuery}} />
+        <button type="button" class="btn btn-primary" {{on "click" this.searchGames}}>
+          {{if this.loading "..." "Rechercher"}}
+        </button>
+      </div>
 
-    def details
-      begin
-        params.require(:id)
-        data = DiscourseGameSheet::BggClient.game_details(params[:id])
-        data[:description_fr] = DiscourseGameSheet::DeeplClient.translate(data[:description])
-        render json: data
-      rescue => e
-        render_error(e)
-      end
-    end
-
-    def create_topic
-      begin
-        p = params.permit(:game_id, :category_id, :include_image, selected_videos: [])
-        p.require([:game_id, :category_id])
-
-        game = DiscourseGameSheet::BggClient.game_details(p[:game_id])
-        game[:description_fr] = DiscourseGameSheet::DeeplClient.translate(game[:description])
-
-        raw_body = "### Description\n#{game[:description_fr]}\n\n"
-        # ... (ajoute ici le reste de ta logique de formatage)
-
-        post_creator = PostCreator.new(current_user, title: "Fiche de jeu : #{game[:name]}", raw: raw_body, category: p[:category_id], skip_validations: true)
-        post = post_creator.create
-
-        if post_creator.errors.present?
-          render json: { error: post_creator.errors.full_messages.join(", ") }, status: 422
-        else
-          render json: { topic_url: post.topic.url }
-        end
-      rescue => e
-        render_error(e)
-      end
-    end
-
-    private
-
-    def render_error(e)
-      Rails.logger.error("#{e.class}: #{e.message}")
-      render json: { error: e.message }, status: 500
-    end
-
-    def ensure_allowed_group
-      allowed_group = SiteSetting.game_sheet_allowed_group
-      return if current_user.staff?
-      if allowed_group.present?
-        group = Group.find_by(name: allowed_group)
-        if group.blank? || !group.users.where(id: current_user.id).exists?
-          raise Discourse::InvalidAccess.new("Cet espace est réservé aux abonnés.")
-        end
-      end
-    end
-  end
-
-  Discourse::Application.routes.append do
-    get "/game-sheet" => "game_sheet#index"
-    get "/game-sheet-api/search" => "game_sheet#search"
-    get "/game-sheet-api/details/:id" => "game_sheet#details"
-    post "/game-sheet-api/create-topic" => "game_sheet#create_topic"
-  end
-end
+      {{#if this.results.length}}
+        <ul>
+          {{#each this.results as |game|}}
+            <li>{{game.name}} <button type="button" {{on "click" (fn this.selectGame game.id)}}>Choisir</button></li>
+          {{/each}}
+        </ul>
+      {{/if}}
+      
+      {{#if this.selectedGame}}
+        <h2>{{this.selectedGame.name}}</h2>
+        <button type="button" class="btn btn-danger" {{on "click" this.submitTopic}}>Créer le sujet</button>
+      {{/if}}
+    </div>
+  </template>
+}
