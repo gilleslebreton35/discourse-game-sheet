@@ -1,8 +1,5 @@
-// assets/javascripts/discourse/templates/gameSheet.gjs
-import GameSheetMain from "../components/game-sheet-main";
-
 <template>
   <div class="wrap">
-    <GameSheetMain />
+    <h1>Test de chargement</h1>
   </div>
 </template>
