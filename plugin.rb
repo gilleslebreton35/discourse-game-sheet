@@ -5,6 +5,9 @@
 
 enabled_site_setting :game_sheet_enabled
 
+register_site_setting :game_sheet_bgg_api_key, default: "", validator: "NoOptionsValidator"
+register_site_setting :game_sheet_allowed_category_ids, default: "", validator: "NoOptionsValidator"
+
 after_initialize do
   require_dependency "application_controller"
   require 'nokogiri'
@@ -101,8 +104,6 @@ after_initialize do
       end
     end
   end
-
-  register_simple_setting :game_sheet_bgg_api_key, ""
 
   class ::GameSheetController < ::ApplicationController
     requires_plugin "discourse-game-sheet"
