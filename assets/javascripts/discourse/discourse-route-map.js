@@ -1,4 +1,4 @@
+// assets/javascripts/discourse/discourse-route-map.js
 export default function () {
-  // On passe en camelCase pour la route interne
-  this.route("gameSheet", { path: "/game-sheet" });
+  this.route("game-sheet", { path: "/game-sheet" });
 }
