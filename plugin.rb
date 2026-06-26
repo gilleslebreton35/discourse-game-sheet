@@ -10,11 +10,11 @@ after_initialize do
   require 'nokogiri'
   require 'net/http'
   require 'uri'
+  require 'erb'
 
   module ::DiscourseGameSheet
-    class BggClient
+ class BggClient
       BASE_URL = "https://boardgamegeek.com/xmlapi2"
-      BGG_TOKEN = "a904f3bf-f154-4890-9618-4dc3835e40c7" 
 
       def self.request_bgg(path)
         sleep 1
@@ -23,7 +23,6 @@ after_initialize do
         http.use_ssl = true
         request = Net::HTTP::Get.new(uri.request_uri)
         request["User-Agent"] = "Discourse-GameSheet"
-        # request["Authorization"] = "Bearer #{BGG_TOKEN}" # Attention: XMLAPI2 ne nécessite pas de token pour le public
         
         begin
           response = http.request(request)
@@ -34,7 +33,33 @@ after_initialize do
         end
       end
 
-      # ... (garde tes méthodes search ici) ...
+      def self.search(query)
+        return { bgg: [] } if query.blank?
+        
+        begin
+          encoded_query = ERB::Util.url_encode(query.to_s.strip)
+          resp = request_bgg("search?query=#{encoded_query}&type=boardgame")
+          
+          return { bgg: [] } if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
+          
+          doc = Nokogiri::XML(resp.body)
+          items = doc.xpath('//item')
+          return { bgg: [] } if items.empty?
+
+          # On prend les 10 premiers résultats
+          results = items.first(10).map do |item|
+            {
+              id: item['id'],
+              name: item.at_xpath('name')&.[]('value'),
+              yearpublished: item.at_xpath('yearpublished')&.[]('value')
+            }
+          end
+          { bgg: results }
+        rescue => e
+          Rails.logger.error("BGG SEARCH CRASH: #{e.message}")
+          { bgg: [] }
+        end
+      end
 
       def self.game_details(id)
         resp = request_bgg("thing?id=#{id}&stats=1")
@@ -47,13 +72,13 @@ after_initialize do
         {
           id: id,
           name: item.at_xpath('name')&.[]('value'),
-          description: item.at_xpath('description')&.text&.gsub(/&amp;/, '&'),
+          description: item.at_xpath('description')&.text&.gsub(/&amp;/, '&')&.gsub(/&quot;/, '"'),
           image: item.at_xpath('image')&.text,
           min_players: item.at_xpath('minplayers')&.[]('value'),
           max_players: item.at_xpath('maxplayers')&.[]('value'),
           playing_time: item.at_xpath('playingtime')&.[]('value'),
           min_age: item.at_xpath('minage')&.[]('value'),
-          videos: [] # Initialisé à vide pour éviter le crash
+          videos: []
         }
       end
     end
