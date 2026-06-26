@@ -1,3 +1,3 @@
 export default function() {
-  this.route("game-sheet", { path: "/game-sheet" });
+  this.route("gameSheet", { path: "/game-sheet" });
 }
