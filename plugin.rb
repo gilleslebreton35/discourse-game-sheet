@@ -1,6 +1,6 @@
 # name: discourse-game-sheet
 # about: Plugin pour créer des fiches de jeux depuis BGG
-# version: 0.6.1
+# version: 0.7
 # authors: Toi
 
 enabled_site_setting :game_sheet_enabled
@@ -10,6 +10,7 @@ after_initialize do
   require 'nokogiri'
   require 'net/http'
   require 'uri'
+  require 'json'
 
   module ::DiscourseGameSheet
     class BggClient
@@ -28,7 +29,6 @@ after_initialize do
         
         begin
           response = http.request(request)
-          Rails.logger.warn("BGG LOG: #{uri} | Status: #{response.code}")
           response
         rescue => e
           Rails.logger.error("BGG ERROR: #{e.message}")
@@ -40,7 +40,6 @@ after_initialize do
         return { bgg: [] } if query.blank?
         
         encoded_query = ERB::Util.url_encode(query.to_s.strip)
-        # 1. On cherche les jeux
         resp = request_bgg("search?query=#{encoded_query}&type=boardgame")
         return { bgg: [] } if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
         
@@ -48,30 +47,23 @@ after_initialize do
         items = doc.xpath('//item')
         return { bgg: [] } if items.empty?
 
-        # 2. On récupère les 10 premiers IDs
         ids = items.map { |i| i['id'] }.first(10)
-        
-        # 3. On appelle l'API "thing" pour récupérer les vraies images de ces 10 jeux
         resp_details = request_bgg("thing?id=#{ids.join(',')}")
         return { bgg: [] } if resp_details.nil? || !resp_details.is_a?(Net::HTTPSuccess)
         
         details_doc = Nokogiri::XML(resp_details.body)
-        
-        # 4. On mappe les résultats avec les images trouvées
         results = details_doc.xpath('//item').map do |item|
           {
             id: item['id'],
             name: item.at_xpath('name')&.[]('value'),
             yearpublished: item.at_xpath('yearpublished')&.[]('value'),
-            # Ici, on récupère le 'thumbnail' qui existe dans l'API 'thing'
-            thumbnail: item.at_xpath('thumbnail')&.text 
+            thumbnail: item.at_xpath('thumbnail')&.text
           }
         end
         { bgg: results }
       end
 
       def self.game_details(id)
-        # On demande les statistiques ET les vidéos avec &stats=1&videos=1
         resp = request_bgg("thing?id=#{id}&stats=1&videos=1")
         return { error: "Non trouvé" } if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
         
@@ -79,13 +71,10 @@ after_initialize do
         item = doc.at_xpath('//item')
         return { error: "Non trouvé" } unless item
         
-        # Extraction des vidéos (limité aux 5 premières)
-        videos = doc.xpath('//video').first(5).map do |v|
-          {
-            title: v['title'],
-            link: v['link']
-          }
-        end
+        # Filtrage des vidéos en Français uniquement
+        videos = doc.xpath('//video').map do |v|
+          { title: v['title'], link: v['link'] }
+        end.select { |v| v[:title] =~ /FR|Français/i }
         
         {
           id: id,
@@ -97,7 +86,7 @@ after_initialize do
           playingtime: item.at_xpath('playingtime')&.[]('value'),
           minage: item.at_xpath('minage')&.[]('value'),
           images: [item.at_xpath('image')&.text].compact,
-          videos: videos # On transmet les vidéos ici
+          videos: videos
         }
       end
     end
@@ -106,20 +95,10 @@ after_initialize do
   class ::GameSheetController < ::ApplicationController
     requires_plugin "discourse-game-sheet"
     before_action :ensure_logged_in
-    skip_before_action :check_xhr, only: [:index]
 
-    def index
-      render html: "", layout: true
-    end
-
-    def search
-      render json: DiscourseGameSheet::BggClient.search(params[:q])
-    end
-
-    def details
-      render json: DiscourseGameSheet::BggClient.game_details(params[:id])
-    end
-
+    def index; render html: "", layout: true; end
+    def search; render json: DiscourseGameSheet::BggClient.search(params[:q]); end
+    def details; render json: DiscourseGameSheet::BggClient.game_details(params[:id]); end
     def categories
       allowed_ids = SiteSetting.game_sheet_allowed_category_ids.to_s.split('|').map(&:to_i)
       render json: Category.where(id: allowed_ids).map { |c| { id: c.id, name: c.name } }
@@ -129,21 +108,24 @@ after_initialize do
       game = DiscourseGameSheet::BggClient.game_details(params[:game_id])
       return render json: { error: game[:error] }, status: 400 if game[:error]
       
-      # Construction sécurisée du Markdown
+      # Récupération des vidéos envoyées par le JS
+      selected_videos = params[:selected_videos].present? ? JSON.parse(params[:selected_videos]) : []
+      
       raw = <<~MARKDOWN
         # #{game[:name]}
         ![#{game[:name]}|600](#{game[:image]})
 
-        👤 **Joueurs :** #{game[:min_players]}-#{game[:max_players]} | ⏳ **Durée :** #{game[:playing_time]} min | 🎂 **Âge :** #{game[:min_age]}+
+        👤 **Joueurs :** #{game[:minplayers]}-#{game[:maxplayers]} | ⏳ **Durée :** #{game[:playingtime]} min | 🎂 **Âge :** #{game[:minage]}+
         [Voir sur BoardGameGeek](https://boardgamegeek.com/boardgame/#{game[:id]})
 
         ## 📖 Description
         #{game[:description]}
-        —description fournie par l’éditeur
+
+        #{selected_videos.any? ? "## 🎥 Vidéos\n" + selected_videos.map { |v| "- [#{v['title']}](#{v['link']})" }.join("\n") : ""}
       MARKDOWN
       
       post = PostCreator.new(current_user, title: "Fiche : #{game[:name]}", raw: raw, category: params[:category_id]).create
-      post&.persisted? ? render(json: { topic_url: post.topic.url }) : render(json: { error: "Erreur lors de la création du sujet" }, status: 422)
+      post&.persisted? ? render(json: { topic_url: post.topic.url }) : render(json: { error: "Erreur" }, status: 422)
     end
   end
 
