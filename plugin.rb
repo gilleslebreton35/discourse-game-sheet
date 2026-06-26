@@ -35,17 +35,33 @@ after_initialize do
         encoded_query = ERB::Util.url_encode(query.to_s.strip)
         resp = request_bgg("search?query=#{encoded_query}&type=boardgame")
         
-        return { bgg: [] } unless resp.is_a?(Net::HTTPSuccess)
+        # LOG CRITIQUE : Affiche tout ce que BGG nous envoie
+        Rails.logger.warn("DEBUG BGG FULL RESPONSE: #{resp.body}")
+        
+        unless resp.is_a?(Net::HTTPSuccess)
+          Rails.logger.warn("DEBUG BGG: Request failed with status #{resp.code}")
+          return { bgg: [] }
+        end
         
         doc = Nokogiri::XML(resp.body)
-        ids = doc.xpath('//item').map { |i| i['id'] }.first(10)
+        items = doc.xpath('//item')
         
-        Rails.logger.warn("BGG SEARCH: Found IDs: #{ids.join(', ')}")
-        return { bgg: [] } if ids.empty?
+        Rails.logger.warn("DEBUG BGG: Found #{items.count} items in XML")
+        
+        ids = items.map { |i| i['id'] }.first(10)
+        
+        if ids.empty?
+          Rails.logger.warn("DEBUG BGG: No IDs extracted! Check XML structure.")
+          return { bgg: [] }
+        end
 
-        # Récupération des détails pour afficher les vignettes
+        Rails.logger.warn("DEBUG BGG: Attempting to fetch details for IDs: #{ids.join(',')}")
+
         resp_details = request_bgg("thing?id=#{ids.join(',')}")
-        return { bgg: [] } unless resp_details.is_a?(Net::HTTPSuccess)
+        unless resp_details.is_a?(Net::HTTPSuccess)
+          Rails.logger.warn("DEBUG BGG: Details request failed")
+          return { bgg: [] }
+        end
         
         details_doc = Nokogiri::XML(resp_details.body)
         results = details_doc.xpath('//item').map do |item|
@@ -56,6 +72,8 @@ after_initialize do
             image: item.at_xpath('thumbnail')&.text
           }
         end
+        
+        Rails.logger.warn("DEBUG BGG: Final results count: #{results.count}")
         { bgg: results }
       end
 
