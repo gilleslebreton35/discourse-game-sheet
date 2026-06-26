@@ -1,5 +1,7 @@
+import GameSheetMain from "../components/game-sheet-main";
+
 <template>
   <div class="wrap">
-    <h1>Test de chargement</h1>
+    <GameSheetMain />
   </div>
 </template>
