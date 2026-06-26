@@ -8,28 +8,28 @@ enabled_site_setting :game_sheet_enabled
 after_initialize do
   require_dependency "application_controller"
 
-  # 1. Définition des modules manquants pour éviter l'erreur 500
+  # Structure du module pour tes services API
   module DiscourseGameSheet
     class BggClient
       def self.search(query)
-        # Logique temporaire : Remplace par ton vrai code BGG
-        Rails.logger.info("Recherche BGG lancée pour : #{query}")
-        { bgg: [{ id: 1, name: "Catan (Mock)" }] } 
+        # REMPLACE CE CODE PAR TA LOGIQUE BGG (Faraday, XML, etc.)
+        { bgg: [{ id: 1, name: "Catan (Test)", thumbnail: "", yearpublished: "1995" }] }
       end
 
       def self.game_details(id)
-        { id: id, name: "Jeu de test", description: "Ceci est une description de test.", image: "", minplayers: 2, maxplayers: 4, playingtime: 60, minage: 10 }
+        # REMPLACE CE CODE PAR TA LOGIQUE BGG
+        { id: id, name: "Catan", description: "Jeu de stratégie...", image: "", minplayers: 3, maxplayers: 4, playingtime: 60, minage: 10 }
       end
     end
 
     class DeeplClient
       def self.translate(text)
-        text # Renvoie le texte tel quel pour l'instant
+        # REMPLACE CE CODE PAR TA LOGIQUE DEEPL
+        text
       end
     end
   end
 
-  # 2. Le contrôleur
   class ::GameSheetController < ::ApplicationController
     requires_plugin "discourse-game-sheet"
     before_action :ensure_logged_in
@@ -68,7 +68,7 @@ after_initialize do
         game[:description_fr] = DiscourseGameSheet::DeeplClient.translate(game[:description])
 
         raw_body = "### Description\n#{game[:description_fr]}\n\n"
-        # ... (reste de ta logique)
+        # ... (ajoute ici le reste de ta logique de formatage)
 
         post_creator = PostCreator.new(current_user, title: "Fiche de jeu : #{game[:name]}", raw: raw_body, category: p[:category_id], skip_validations: true)
         post = post_creator.create
@@ -86,9 +86,7 @@ after_initialize do
     private
 
     def render_error(e)
-      Rails.logger.error("--- ERREUR PLUGIN GAME SHEET ---")
       Rails.logger.error("#{e.class}: #{e.message}")
-      Rails.logger.error(e.backtrace.join("\n"))
       render json: { error: e.message }, status: 500
     end
 
@@ -104,11 +102,10 @@ after_initialize do
     end
   end
 
-  # 3. Les routes
   Discourse::Application.routes.append do
     get "/game-sheet" => "game_sheet#index"
     get "/game-sheet-api/search" => "game_sheet#search"
     get "/game-sheet-api/details/:id" => "game_sheet#details"
-    post "/game-sheet-api/create_topic" => "game_sheet#create_topic"
+    post "/game-sheet-api/create-topic" => "game_sheet#create_topic"
   end
 end
