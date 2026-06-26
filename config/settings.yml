@@ -9,3 +9,5 @@ plugins:
   game_sheet_allowed_group:
     default: "trust_level_1" # Change par le nom de ton groupe d'abonnés (ex: "subscribers")
     client: true
+  game_sheet_allowed_category_ids:
+    default: "1|2|3"
