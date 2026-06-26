@@ -1,6 +1,6 @@
 # name: discourse-game-sheet
 # about: Plugin pour créer des fiches de jeux depuis BGG
-# version: 0.8.1
+# version: 0.8.2
 # authors: Toi
 
 enabled_site_setting :game_sheet_enabled
@@ -12,15 +12,19 @@ after_initialize do
   require 'uri'
   require 'erb'
 
-  # Ajout des settings personnalisés dans la base de données
+  # Ajout des settings personnalisés
   SiteSetting.refresh!
   
-  unless SiteSetting.where(name: "game_sheet_bgg_api_key").exists?
-    SiteSetting.create!(name: "game_sheet_bgg_api_key", data_type: 1, value: "")
+  unless SiteSetting.where(name: "game_sheet_bgg_token").exists?
+    SiteSetting.create!(name: "game_sheet_bgg_token", data_type: 1, value: "a904f3bf-f154-4890-9618-4dc3835e40c7")
   end
   
   unless SiteSetting.where(name: "game_sheet_allowed_category_ids").exists?
     SiteSetting.create!(name: "game_sheet_allowed_category_ids", data_type: 1, value: "")
+  end
+
+  unless SiteSetting.where(name: "game_sheet_allowed_group").exists?
+    SiteSetting.create!(name: "game_sheet_allowed_group", data_type: 1, value: "")
   end
 
   module ::DiscourseGameSheet
@@ -28,16 +32,14 @@ after_initialize do
       BASE_URL = "https://boardgamegeek.com/xmlapi2"
 
       def self.request_bgg(path)
-        sleep 1 # Anti-spam BGG obligatoire
+        sleep 1
         uri = URI.parse("#{BASE_URL}/#{path}")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
         
         request = Net::HTTP::Get.new(uri.request_uri)
         request["User-Agent"] = "Discourse-GameSheet/1.0"
-        
-        # ⚠️ TOKEN OBLIGATOIRE pour que BGG réponde
-        request["Authorization"] = "Bearer a904f3bf-f154-4890-9618-4dc3835e40c7"
+        request["Authorization"] = "Bearer #{SiteSetting.game_sheet_bgg_token}"
         
         begin
           response = http.request(request)
@@ -101,6 +103,7 @@ after_initialize do
           maxplayers: item.at_xpath('maxplayers')&.[]('value'),
           playingtime: item.at_xpath('playingtime')&.[]('value'),
           minage: item.at_xpath('minage')&.[]('value'),
+          yearpublished: item.at_xpath('yearpublished')&.[]('value'),
           images: [],
           videos: []
         }
@@ -108,78 +111,15 @@ after_initialize do
     end
   end
 
-  class ::GameSheetController < ::ApplicationController
-    requires_plugin "discourse-game-sheet"
-    before_action :ensure_logged_in
+  # Chargement du contrôleur depuis le fichier dédié
+  load File.expand_path("../app/controllers/discourse_game_sheet/game_sheet_controller.rb", __FILE__)
 
-    def index
-      render html: "", layout: true
-    end
-
-    def search
-      render json: DiscourseGameSheet::BggClient.search(params[:q])
-    end
-
-    def details
-      render json: DiscourseGameSheet::BggClient.game_details(params[:id])
-    end
-
-    def categories
-      allowed_ids = SiteSetting.game_sheet_allowed_category_ids.split('|').map(&:to_i)
-      render json: Category.where(id: allowed_ids).map { |c| { id: c.id, name: c.name } }
-    end
-
-    def create_topic
-      game = DiscourseGameSheet::BggClient.game_details(params[:game_id])
-      return render json: { error: game[:error] }, status: 400 if game[:error]
-      
-      raw = String.new
-      
-      if params[:include_image] == "true" && game[:image].present?
-        raw << "![#{game[:name]}|600](#{game[:image]})\n\n"
-      end
-      
-      if params[:selected_images].present?
-        raw << "### 🖼️ Images du jeu\n\n"
-        JSON.parse(params[:selected_images]).each do |img_url|
-          raw << "![Image](#{img_url})\n"
-        end
-        raw << "\n"
-      end
-      
-      if params[:selected_videos].present?
-        raw << "### 🎬 Vidéos\n\n"
-        params[:selected_videos].split('|').each do |video_url|
-          raw << "#{video_url}\n"
-        end
-        raw << "\n"
-      end
-      
-      raw << "# #{game[:name]}\n\n"
-      raw << "👤 **Joueurs :** #{game[:minplayers]}-#{game[:maxplayers]} | ⏳ **Durée :** #{game[:playingtime]} min | 🎂 **Âge :** #{game[:minage]}+\n\n"
-      raw << "[Voir sur BoardGameGeek](https://boardgamegeek.com/boardgame/#{game[:id]})\n\n"
-      raw << "## 📖 Description\n#{game[:description]}\n"
-      
-      post = PostCreator.new(
-        current_user,
-        title: "Fiche : #{game[:name]}",
-        raw: raw,
-        category: params[:category_id]
-      ).create
-      
-      if post&.persisted?
-        render json: { topic_url: post.topic.url }
-      else
-        render json: { error: "Erreur lors de la création du sujet" }, status: 422
-      end
-    end
-  end
-
+  # Routes corrigées avec le bon namespace
   Discourse::Application.routes.append do
-    get "/game-sheet" => "game_sheet#index"
-    get "/game-sheet-api/search" => "game_sheet#search"
-    get "/game-sheet-api/details/:id" => "game_sheet#details"
-    get "/game-sheet-api/categories" => "game_sheet#categories"
-    post "/game-sheet-api/create-topic" => "game_sheet#create_topic"
+    get "/game-sheet" => "discourse_game_sheet/game_sheet#index"
+    get "/game-sheet-api/search" => "discourse_game_sheet/game_sheet#search"
+    get "/game-sheet-api/details/:id" => "discourse_game_sheet/game_sheet#details"
+    get "/game-sheet-api/categories" => "discourse_game_sheet/game_sheet#categories"
+    post "/game-sheet-api/create-topic" => "discourse_game_sheet/game_sheet#create_topic"
   end
 end
