@@ -1,6 +1,6 @@
 # name: discourse-game-sheet
 # about: Plugin pour créer des fiches de jeux depuis BGG
-# version: 0.7
+# version: 1.0
 # authors: Toi
 
 enabled_site_setting :game_sheet_enabled
@@ -13,16 +13,20 @@ after_initialize do
   require 'erb'
 
   module ::DiscourseGameSheet
- class BggClient
+    class BggClient
       BASE_URL = "https://boardgamegeek.com/xmlapi2"
+      BGG_TOKEN = "a904f3bf-f154-4890-9618-4dc3835e40c7" 
 
       def self.request_bgg(path)
-        sleep 1
         uri = URI.parse("#{BASE_URL}/#{path}")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
+        http.open_timeout = 5
+        http.read_timeout = 10
+        
         request = Net::HTTP::Get.new(uri.request_uri)
-        request["User-Agent"] = "Discourse-GameSheet"
+        request["User-Agent"] = "Mozilla/5.0 (compatible; DiscourseGameSheet/1.0)"
+        request["Authorization"] = "Bearer #{BGG_TOKEN}" 
         
         begin
           response = http.request(request)
@@ -36,39 +40,29 @@ after_initialize do
       def self.search(query)
         return { bgg: [] } if query.blank?
         
-        begin
-          encoded_query = ERB::Util.url_encode(query.to_s.strip)
-          resp = request_bgg("search?query=#{encoded_query}&type=boardgame")
-          
-          # DEBUG : Affiche la réponse dans les logs si c'est vide
-          if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
-             Rails.logger.warn("BGG SEARCH: Erreur réseau ou API")
-             return { bgg: [] }
-          end
-          
-          # Log la réponse brute pour voir ce que BGG envoie
-          Rails.logger.warn("BGG RAW RESPONSE: #{resp.body[0..500]}") 
+        encoded = ERB::Util.url_encode(query.to_s.strip)
+        resp = request_bgg("search?query=#{encoded}&type=boardgame")
+        
+        return { bgg: [] } if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
+        
+        doc = Nokogiri::XML(resp.body)
+        items = doc.xpath('//item').first(10)
+        return { bgg: [] } if items.empty?
 
-          doc = Nokogiri::XML(resp.body)
-          items = doc.xpath('//item')
-          
-          if items.empty?
-            Rails.logger.warn("BGG SEARCH: Aucun item trouvé avec le XPath //item")
-            return { bgg: [] }
-          end
+        ids = items.map { |i| i['id'] }.join(',')
+        resp_details = request_bgg("thing?id=#{ids}")
+        return { bgg: [] } if resp_details.nil? || !resp_details.is_a?(Net::HTTPSuccess)
 
-          results = items.first(10).map do |item|
-            {
-              id: item['id'],
-              name: item.at_xpath('name')&.[]('value'),
-              yearpublished: item.at_xpath('yearpublished')&.[]('value')
-            }
-          end
-          { bgg: results }
-        rescue => e
-          Rails.logger.error("BGG SEARCH CRASH: #{e.message}")
-          { bgg: [] }
+        details_doc = Nokogiri::XML(resp_details.body)
+        results = details_doc.xpath('//item').map do |item|
+          {
+            id: item['id'],
+            name: item.at_xpath('name')&.[]('value'),
+            yearpublished: item.at_xpath('yearpublished')&.[]('value'),
+            image: item.at_xpath('thumbnail')&.text
+          }
         end
+        { bgg: results }
       end
 
       def self.game_details(id)
@@ -111,16 +105,15 @@ after_initialize do
     end
 
     def categories
-      # Utilise le setting enregistré
-      allowed_ids = SiteSetting.game_sheet_allowed_category_ids.split('|').map(&:to_i)
-      render json: Category.where(id: allowed_ids).map { |c| { id: c.id, name: c.name } }
+      allowed_ids = SiteSetting.game_sheet_allowed_category_ids.to_s.split('|').map(&:to_i)
+      cats = Category.where(id: allowed_ids).map { |c| { id: c.id, name: c.name } }
+      render json: cats
     end
 
     def create_topic
       game = DiscourseGameSheet::BggClient.game_details(params[:game_id])
       return render json: { error: game[:error] }, status: 400 if game[:error]
       
-      # Template Markdown
       raw = <<~MARKDOWN
         # #{game[:name]}
         ![#{game[:name]}|600](#{game[:image]})
@@ -134,7 +127,7 @@ after_initialize do
       MARKDOWN
       
       post = PostCreator.new(current_user, title: "Fiche : #{game[:name]}", raw: raw, category: params[:category_id]).create
-      post&.persisted? ? render(json: { topic_url: post.topic.url }) : render(json: { error: "Erreur" }, status: 422)
+      post&.persisted? ? render(json: { topic_url: post.topic.url }) : render(json: { error: "Erreur création" }, status: 422)
     end
   end
 
