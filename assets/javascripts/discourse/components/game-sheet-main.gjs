@@ -26,8 +26,10 @@ export default class GameSheetMain extends Component {
     this.results = res.bgg || [];
   }
 
+  // MODIFICATION ICI : On récupère l'ID depuis l'attribut data-id
   @action
-  async selectGame(gameId) {
+  async selectGame(event) {
+    const gameId = event.target.dataset.id;
     this.selectedGame = await ajax(`/game-sheet-api/details/${gameId}`);
     this.categories = await ajax("/game-sheet-api/categories");
   }
@@ -57,6 +59,7 @@ export default class GameSheetMain extends Component {
 
   @action
   async submitTopic() {
+    if (!this.selectedGame) return;
     const res = await ajax("/game-sheet-api/create-topic", {
       type: "POST",
       data: {
@@ -77,7 +80,8 @@ export default class GameSheetMain extends Component {
       {{#each this.results as |game|}}
         <div style="margin:10px 0;">
           {{game.name}} 
-          <button type="button" {{on "click" (fn this.selectGame game.id)}}>Choisir</button>
+          {{!-- On remplace (fn ...) par un simple attribut data-id --}}
+          <button type="button" data-id={{game.id}} {{on "click" this.selectGame}}>Choisir</button>
         </div>
       {{/each}}
 
