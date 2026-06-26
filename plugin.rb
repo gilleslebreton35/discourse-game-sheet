@@ -72,8 +72,8 @@ after_initialize do
       end
 
       def self.game_details(id)
-        resp = request_bgg("thing?id=#{id}&stats=1")
-        return { error: "Non trouvé" } if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
+        resp = request_bgg("thing?id=#{id}")
+        return { error: "Non trouvé" } unless resp.is_a?(Net::HTTPSuccess)
         
         doc = Nokogiri::XML(resp.body)
         item = doc.at_xpath('//item')
@@ -82,9 +82,9 @@ after_initialize do
         {
           id: id,
           name: item.at_xpath('name')&.[]('value'),
+          # On nettoie le HTML de la description BGG
           description: item.at_xpath('description')&.text&.gsub(/&amp;/, '&'),
-          image: item.at_xpath('image')&.text,
-          videos: item.xpath('.//video').map { |v| { title: v['title'], link: v['link'] } }
+          image: item.at_xpath('image')&.text # C'est l'image grand format
         }
       end
     end
