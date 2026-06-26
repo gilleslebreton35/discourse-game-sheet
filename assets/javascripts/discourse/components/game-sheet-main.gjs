@@ -2,6 +2,9 @@ import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
 import { on } from "@ember/modifier";
+import { ajax } from "discourse/lib/ajax";
+import { popupAjaxError } from "discourse/lib/ajax-error";
+import discourseDebounce from "discourse/lib/debounce";
 
 export default class GameSheetMain extends Component {
   @tracked query = "";
@@ -14,13 +17,13 @@ export default class GameSheetMain extends Component {
   @tracked selectedVideos = [];
   @tracked loading = false;
   @tracked creating = false;
-  @tracked searchLimit = 10; // ← Ajouté : limite initiale
+  @tracked searchLimit = 10;
 
   @action
   updateQuery(event) {
     this.query = event.target.value;
-    this.searchLimit = 10; // ← Reset la limite quand on retape
-    debounce(this, this.performSearch, 500);
+    this.searchLimit = 10;
+    discourseDebounce(this, this.performSearch, 500);
   }
 
   @action
@@ -39,10 +42,9 @@ export default class GameSheetMain extends Component {
 
   @action
   expandSearch() {
-    // On augmente la limite pour afficher plus de résultats
     this.searchLimit = this.searchLimit + 20;
-    // On force un rafraîchissement de l'affichage
-    this.results = this.results;
+    // Force le re-render
+    this.results = [...this.results];
   }
 
   @action
@@ -137,31 +139,32 @@ export default class GameSheetMain extends Component {
       {{/if}}
 
       {{#if this.results.length}}
-        {{! Affiche les résultats selon la limite }}
-        {{#each this.results.slice(0, this.searchLimit) as |game|}}
-          <div style="padding:10px; border-bottom:1px solid #eee; display:flex; align-items:center; gap:15px;">
-            {{! Image du jeu à gauche }}
-            <div style="width:60px; height:60px; flex-shrink:0; border-radius:5px; overflow:hidden; background:#f0f0f0; display:flex; align-items:center; justify-content:center;">
-              {{#if game.thumbnail}}
-                <img src={{game.thumbnail}} alt="" 
-                     style="width:100%; height:100%; object-fit:cover;" />
-              {{else}}
-                <span style="font-size:24px; color:#ccc;">🎲</span>
-              {{/if}}
+        {{#each this.results as |game index|}}
+          {{#if (lte index this.searchLimit)}}
+            <div style="padding:10px; border-bottom:1px solid #eee; display:flex; align-items:center; gap:15px;">
+              {{! Image du jeu à gauche }}
+              <div style="width:60px; height:60px; flex-shrink:0; border-radius:5px; overflow:hidden; background:#f0f0f0; display:flex; align-items:center; justify-content:center;">
+                {{#if game.thumbnail}}
+                  <img src={{game.thumbnail}} alt="" 
+                       style="width:100%; height:100%; object-fit:cover;" />
+                {{else}}
+                  <span style="font-size:24px; color:#ccc;">🎲</span>
+                {{/if}}
+              </div>
+              {{! Infos du jeu }}
+              <div style="flex:1;">
+                <strong>{{game.name}}</strong>
+                {{#if game.yearpublished}}
+                  <span style="color:#888; margin-left:8px;">({{game.yearpublished}})</span>
+                {{/if}}
+              </div>
+              {{! Bouton Choisir }}
+              <button type="button" data-id={{game.id}} {{on "click" this.selectGame}} 
+                      class="btn btn-primary btn-small">
+                Choisir
+              </button>
             </div>
-            {{! Infos du jeu }}
-            <div style="flex:1;">
-              <strong>{{game.name}}</strong>
-              {{#if game.yearpublished}}
-                <span style="color:#888; margin-left:8px;">({{game.yearpublished}})</span>
-              {{/if}}
-            </div>
-            {{! Bouton Choisir }}
-            <button type="button" data-id={{game.id}} {{on "click" this.selectGame}} 
-                    class="btn btn-primary btn-small">
-              Choisir
-            </button>
-          </div>
+          {{/if}}
         {{/each}}
 
         {{! Bouton pour élargir la recherche }}
@@ -169,7 +172,7 @@ export default class GameSheetMain extends Component {
           <div style="text-align:center; margin-top:15px;">
             <button type="button" {{on "click" this.expandSearch}} 
                     class="btn btn-default">
-              🔍 Afficher plus de résultats ({{this.results.length - this.searchLimit}} supplémentaires)
+              🔍 Afficher plus de résultats ({{sub this.results.length this.searchLimit}} supplémentaires)
             </button>
           </div>
         {{/if}}
