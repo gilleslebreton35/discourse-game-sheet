@@ -2,8 +2,14 @@
 
 module DiscourseGameSheet
   class GameSheetController < ::ApplicationController
+    requires_plugin "discourse-game-sheet"
+
     before_action :ensure_logged_in
     before_action :ensure_allowed_group
+
+    def index
+      render html: "", layout: true
+    end
 
     def search
       params.require(:q)
@@ -13,8 +19,16 @@ module DiscourseGameSheet
     def details
       params.require(:id)
       data = DiscourseGameSheet::BggClient.game_details(params[:id])
-      data[:description_fr] = DiscourseGameSheet::DeeplClient.translate(data[:description])
+      
+      # Commenté temporairement - décommentez quand DeeplClient sera implémenté
+      # data[:description_fr] = DiscourseGameSheet::DeeplClient.translate(data[:description])
+      
       render json: data
+    end
+
+    def categories
+      allowed_ids = SiteSetting.game_sheet_allowed_category_ids.split('|').map(&:to_i)
+      render json: Category.where(id: allowed_ids).map { |c| { id: c.id, name: c.name } }
     end
 
     def create_topic
@@ -22,14 +36,16 @@ module DiscourseGameSheet
       p.require([:game_id, :category_id])
 
       game = DiscourseGameSheet::BggClient.game_details(p[:game_id])
-      game[:description_fr] = DiscourseGameSheet::DeeplClient.translate(game[:description])
+      
+      # Commenté temporairement - décommentez quand DeeplClient sera implémenté
+      # game[:description_fr] = DiscourseGameSheet::DeeplClient.translate(game[:description])
 
       raw_body = String.new
       if p[:include_image] == "true" && game[:image].present?
-        raw_body << "![#{game[:name]}]({#game[:image]})\n\n"
+        raw_body << "![#{game[:name]}](#{game[:image]})\n\n"
       end
 
-      raw_body << "### Description\n#{Search.clean_html(game[:description_fr])}\n\n"
+      raw_body << "### Description\n#{Search.clean_html(game[:description])}\n\n"
       raw_body << "### Informations Techniques\n"
       raw_body << "* **Année de sortie :** #{game[:yearpublished]}\n"
       raw_body << "* **Nombre de joueurs :** #{game[:minplayers]} à #{game[:maxplayers]}\n"
@@ -43,6 +59,9 @@ module DiscourseGameSheet
         end
       end
 
+      raw_body << "---\n"
+      raw_body << "*Fiche générée automatiquement via BoardGameGeek*"
+
       post_creator = PostCreator.new(
         current_user,
         title: "Fiche de jeu : #{game[:name]}",
@@ -53,7 +72,7 @@ module DiscourseGameSheet
       post = post_creator.create
 
       if post_creator.errors.present?
-        render_json_error post_creator.errors.full_messages.join(", "), status: 422
+        render json: { error: post_creator.errors.full_messages.join(", ") }, status: 422
       else
         render json: { topic_url: post.topic.url }
       end
