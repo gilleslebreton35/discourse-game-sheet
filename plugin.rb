@@ -1,6 +1,6 @@
 # name: discourse-game-sheet
 # about: Plugin pour créer des fiches de jeux depuis BGG
-# version: 0.7
+# version: 0.8
 # authors: Toi
 
 enabled_site_setting :game_sheet_enabled
@@ -16,13 +16,23 @@ after_initialize do
     class BggClient
       BASE_URL = "https://boardgamegeek.com/xmlapi2"
 
+      def self.api_key
+        SiteSetting.game_sheet_bgg_api_key.presence
+      end
+
       def self.request_bgg(path)
         sleep 1
         uri = URI.parse("#{BASE_URL}/#{path}")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
+        
         request = Net::HTTP::Get.new(uri.request_uri)
-        request["User-Agent"] = "Discourse-GameSheet"
+        request["User-Agent"] = "Discourse-GameSheet/1.0"
+        
+        # Ajout du token si présent
+        if api_key
+          request["Authorization"] = "Bearer #{api_key}"
+        end
         
         begin
           response = http.request(request)
@@ -41,7 +51,7 @@ after_initialize do
           resp = request_bgg("search?query=#{encoded_query}&type=boardgame")
           
           if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
-             Rails.logger.warn("BGG SEARCH: Erreur réseau ou API")
+             Rails.logger.warn("BGG SEARCH: Erreur réseau ou API - Code: #{resp&.code}")
              return { bgg: [] }
           end
 
@@ -49,7 +59,7 @@ after_initialize do
           items = doc.xpath('//item')
           
           if items.empty?
-            Rails.logger.warn("BGG SEARCH: Aucun item trouvé avec le XPath //item")
+            Rails.logger.warn("BGG SEARCH: Aucun item trouvé")
             return { bgg: [] }
           end
 
@@ -76,12 +86,6 @@ after_initialize do
         item = doc.at_xpath('//item')
         return { error: "Non trouvé" } unless item
         
-        # Récupération des images supplémentaires
-        images = []
-        item.xpath('//image').each do |img|
-          images << img.text
-        end
-        
         {
           id: id,
           name: item.at_xpath('name')&.[]('value'),
@@ -91,12 +95,14 @@ after_initialize do
           maxplayers: item.at_xpath('maxplayers')&.[]('value'),
           playingtime: item.at_xpath('playingtime')&.[]('value'),
           minage: item.at_xpath('minage')&.[]('value'),
-          images: images, # Liste d'images
+          images: [],
           videos: []
         }
       end
     end
   end
+
+  register_simple_setting :game_sheet_bgg_api_key, ""
 
   class ::GameSheetController < ::ApplicationController
     requires_plugin "discourse-game-sheet"
@@ -123,15 +129,12 @@ after_initialize do
       game = DiscourseGameSheet::BggClient.game_details(params[:game_id])
       return render json: { error: game[:error] }, status: 400 if game[:error]
       
-      # Construction du corps du message avec médias sélectionnés
       raw = String.new
       
-      # Image principale
       if params[:include_image] == "true" && game[:image].present?
         raw << "![#{game[:name]}|600](#{game[:image]})\n\n"
       end
       
-      # Images sélectionnées
       if params[:selected_images].present?
         raw << "### 🖼️ Images du jeu\n\n"
         JSON.parse(params[:selected_images]).each do |img_url|
@@ -140,7 +143,6 @@ after_initialize do
         raw << "\n"
       end
       
-      # Vidéos sélectionnées
       if params[:selected_videos].present?
         raw << "### 🎬 Vidéos\n\n"
         params[:selected_videos].split('|').each do |video_url|
@@ -149,7 +151,6 @@ after_initialize do
         raw << "\n"
       end
       
-      # Informations
       raw << "# #{game[:name]}\n\n"
       raw << "👤 **Joueurs :** #{game[:minplayers]}-#{game[:maxplayers]} | ⏳ **Durée :** #{game[:playingtime]} min | 🎂 **Âge :** #{game[:minage]}+\n\n"
       raw << "[Voir sur BoardGameGeek](https://boardgamegeek.com/boardgame/#{game[:id]})\n\n"
