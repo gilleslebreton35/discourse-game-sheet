@@ -28,7 +28,6 @@ export default class GameSheetMain extends Component {
 
   @action
   async selectGame(event) {
-    // On récupère l'ID via l'attribut HTML data-id
     const gameId = event.target.dataset.id;
     this.selectedGame = await ajax(`/game-sheet-api/details/${gameId}`);
     this.categories = await ajax("/game-sheet-api/categories");
@@ -36,7 +35,6 @@ export default class GameSheetMain extends Component {
 
   @action
   toggleImage(event) {
-    // On récupère l'URL via l'attribut HTML data-img
     const img = event.target.dataset.img;
     if (event.target.checked) {
       this.selectedImages = [...this.selectedImages, img];
@@ -47,7 +45,6 @@ export default class GameSheetMain extends Component {
 
   @action
   toggleVideo(event) {
-    // On récupère le titre/ID via l'attribut HTML data-vid
     const vid = event.target.dataset.vid;
     if (event.target.checked) {
       this.selectedVideos = [...this.selectedVideos, vid];
@@ -93,7 +90,6 @@ export default class GameSheetMain extends Component {
           <h3>Images :</h3>
           {{#each this.selectedGame.images as |img|}}
             <label>
-              {{!-- On passe img via data-img --}}
               <input type="checkbox" data-img={{img}} {{on "change" this.toggleImage}} /> 
               <img src={{img}} width="50" alt="game-art"/>
             </label>
@@ -102,7 +98,6 @@ export default class GameSheetMain extends Component {
           <h3>Vidéos :</h3>
           {{#each this.selectedGame.videos as |vid|}}
             <label>
-              {{!-- On passe le titre via data-vid --}}
               <input type="checkbox" data-vid={{vid.title}} {{on "change" this.toggleVideo}} /> 
               {{vid.title}}
             </label>
