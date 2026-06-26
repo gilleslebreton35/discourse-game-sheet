@@ -8,25 +8,19 @@ import { popupAjaxError } from "discourse/lib/ajax-error";
 import { fn } from "@ember/helper";
 
 export default class GameSheetMain extends Component {
-  @service store; // Service pour accéder aux données du forum
+  @service site; // Utilisation du service site natif
 
   @tracked query = "";
   @tracked results = [];
   @tracked loading = false;
   @tracked selectedGame = null;
   @tracked loadingDetails = false;
-  @tracked destinationCategory = null;
-  @tracked categories = []; // Stockera la liste des catégories
+  @tracked destinationCategory = "";
   @tracked creating = false;
 
-  constructor() {
-    super(...arguments);
-    this.loadCategories();
-  }
-
-  // Chargement des catégories depuis le store Discourse
-  async loadCategories() {
-    this.categories = await this.store.findAll("category");
+  // On récupère les catégories via le service 'site' de Discourse
+  get availableCategories() {
+    return this.site.categories || [];
   }
 
   @action updateQuery(event) { this.query = event.target.value; }
@@ -84,45 +78,43 @@ export default class GameSheetMain extends Component {
   <template>
     <div class="wrap" style="padding: 20px;">
       <h1>Créateur de Fiches</h1>
-      
-      <div class="search-bar" style="display: flex; gap: 10px; margin-bottom: 20px;">
-        <input type="text" placeholder="Rechercher un jeu..." value={{this.query}} {{on "input" this.updateQuery}} />
+      <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+        <input type="text" placeholder="Rechercher..." value={{this.query}} {{on "input" this.updateQuery}} />
         <button type="button" class="btn btn-primary" {{on "click" this.searchGames}}>
-          {{if this.loading "Recherche..." "Rechercher"}}
+          {{if this.loading "..." "Rechercher"}}
         </button>
       </div>
 
-      {{! Liste des résultats avec image et année }}
       {{#if this.results.length}}
-        <ul class="game-results" style="list-style: none; padding: 0;">
+        <ul style="list-style: none; padding: 0;">
           {{#each this.results as |game|}}
-            <li style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">
+            <li style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px; border-bottom: 1px solid #444; padding: 5px;">
               {{#if game.image}}<img src={{game.image}} width="50" alt="" />{{/if}}
-              <span><strong>{{game.name}}</strong> ({{game.yearpublished}})</span>
+              <div style="flex-grow: 1;">
+                <strong>{{game.name}}</strong> ({{game.yearpublished}})
+              </div>
               <button type="button" class="btn" {{on "click" (fn this.selectGame game.id)}}>Choisir</button>
             </li>
           {{/each}}
         </ul>
       {{/if}}
       
-      {{! Aperçu du jeu sélectionné }}
-      {{#if this.loadingDetails}}<p>Chargement...</p>{{/if}}
-      
       {{#if this.selectedGame}}
-        <div class="preview-box" style="margin-top: 30px; border: 1px solid #ddd; padding: 20px;">
+        <div style="margin-top: 30px; border: 1px solid #ddd; padding: 20px;">
           <h2>{{this.selectedGame.name}}</h2>
-          {{#if this.selectedGame.image}}<img src={{this.selectedGame.image}} width="200" alt="box" />{{/if}}
-          <p>{{{this.selectedGame.description}}}</p>
+          <img src={{this.selectedGame.image}} width="200" alt="box" />
+          
+          <div style="margin: 15px 0;">
+            <label>Choisir la catégorie :</label>
+            <select {{on "change" this.updateCategory}}>
+              <option value="">-- Sélectionner --</option>
+              {{#each this.availableCategories as |cat|}}
+                <option value={{cat.id}}>{{cat.name}}</option>
+              {{/each}}
+            </select>
+          </div>
 
-          <label>Catégorie :</label>
-          <select {{on "change" this.updateCategory}}>
-            <option value="">-- Choisir une catégorie --</option>
-            {{#each this.categories as |cat|}}
-              <option value={{cat.id}}>{{cat.name}}</option>
-            {{/each}}
-          </select>
-
-          <button type="button" class="btn btn-primary" {{on "click" this.submitTopic}} disabled={{this.creating}}>
+          <button type="button" class="btn btn-danger" {{on "click" this.submitTopic}} disabled={{this.creating}}>
             {{if this.creating "Création..." "Créer le sujet"}}
           </button>
         </div>
