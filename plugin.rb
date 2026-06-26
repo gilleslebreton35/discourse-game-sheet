@@ -28,7 +28,7 @@ after_initialize do
   end
 
   module ::DiscourseGameSheet
-    class BggClient
+  class BggClient
       BASE_URL = "https://boardgamegeek.com/xmlapi2"
 
       def self.request_bgg(path)
@@ -39,7 +39,7 @@ after_initialize do
         
         request = Net::HTTP::Get.new(uri.request_uri)
         request["User-Agent"] = "Discourse-GameSheet/1.0"
-        request["Authorization"] = "Bearer #{SiteSetting.game_sheet_bgg_token}"
+        # request["Authorization"] = "Bearer #{SiteSetting.game_sheet_bgg_token}"
         
         begin
           response = http.request(request)
@@ -59,26 +59,32 @@ after_initialize do
           resp = request_bgg("search?query=#{encoded_query}&type=boardgame")
           
           if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
-            Rails.logger.warn("BGG SEARCH: Erreur réseau ou API - Code: #{resp&.code}")
             return { bgg: [] }
           end
 
           doc = Nokogiri::XML(resp.body)
-          items = doc.xpath('//item')
+          # CORRECTION 1 : On prend les 30 premiers pour que le bouton "Afficher plus" (limite 10) apparaisse
+          items = doc.xpath('//item').first(30) 
           
-          if items.empty?
-            Rails.logger.warn("BGG SEARCH: Aucun item trouvé")
-            return { bgg: [] }
-          end
+          return { bgg: [] } if items.empty?
 
-          results = items.first(10).map do |item|
+          # CORRECTION 2 : On fait une requête /thing pour obtenir les miniatures (images)
+          ids = items.map { |i| i['id'] }.join(',')
+          resp_details = request_bgg("thing?id=#{ids}")
+          
+          return { bgg: [] } if resp_details.nil? || !resp_details.is_a?(Net::HTTPSuccess)
+
+          details_doc = Nokogiri::XML(resp_details.body)
+          
+          results = details_doc.xpath('//item').map do |item|
             {
               id: item['id'],
-              name: item.at_xpath('name')&.[]('value'),
+              name: item.at_xpath('name')&.[]('value') || "Inconnu",
               yearpublished: item.at_xpath('yearpublished')&.[]('value'),
-              thumbnail: item.at_xpath('thumbnail')&.text
+              thumbnail: item.at_xpath('thumbnail')&.text # Maintenant on a la miniature !
             }
           end
+          
           { bgg: results }
         rescue => e
           Rails.logger.error("BGG SEARCH CRASH: #{e.message}")
@@ -94,17 +100,20 @@ after_initialize do
         item = doc.at_xpath('//item')
         return { error: "Non trouvé" } unless item
         
+        image_url = item.at_xpath('image')&.text
+        
         {
           id: id,
           name: item.at_xpath('name')&.[]('value'),
           description: item.at_xpath('description')&.text&.gsub(/&amp;/, '&')&.gsub(/&quot;/, '"'),
-          image: item.at_xpath('image')&.text,
+          image: image_url,
           minplayers: item.at_xpath('minplayers')&.[]('value'),
           maxplayers: item.at_xpath('maxplayers')&.[]('value'),
           playingtime: item.at_xpath('playingtime')&.[]('value'),
           minage: item.at_xpath('minage')&.[]('value'),
           yearpublished: item.at_xpath('yearpublished')&.[]('value'),
-          images: [],
+          # CORRECTION 3 : L'API standard ne donne qu'une image, on l'ajoute au tableau pour la galerie
+          images: image_url.present? ? [image_url] : [], 
           videos: []
         }
       end
