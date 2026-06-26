@@ -120,8 +120,21 @@ after_initialize do
       game = DiscourseGameSheet::BggClient.game_details(params[:game_id])
       return render json: { error: game[:error] }, status: 400 if game[:error]
       
-      image_markdown = game[:image].present? ? "![image|600](#{game[:image]})\n\n" : ""
-      raw = "#{image_markdown}### Description\n#{game[:description]}"
+      # Construction du template Markdown
+      raw = <<~MARKDOWN
+        # #{game[:name]}
+        ![#{game[:name]}|600](#{game[:image]})
+
+        👤 **Joueurs :** #{game[:min_players]}-#{game[:max_players]} | ⏳ **Durée :** #{game[:playing_time]} min | 🎂 **Âge :** #{game[:min_age]}+
+        [Voir sur BoardGameGeek](https://boardgamegeek.com/boardgame/#{game[:id]})
+
+        ## 📖 Description
+        #{game[:description]}
+        —description fournie par l’éditeur
+
+        ## 🎥 Vidéos
+        #{game[:videos].take(3).map { |v| "- [#{v[:title]}](#{v[:link]})" }.join("\n")}
+      MARKDOWN
       
       post = PostCreator.new(current_user, title: "Fiche : #{game[:name]}", raw: raw, category: params[:category_id]).create
       post&.persisted? ? render(json: { topic_url: post.topic.url }) : render(json: { error: "Erreur" }, status: 422)
