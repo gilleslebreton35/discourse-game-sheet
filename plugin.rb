@@ -1,6 +1,6 @@
 # name: discourse-game-sheet
 # about: Plugin pour créer des fiches de jeux depuis BGG
-# version: 0.7.1
+# version: 0.7.2
 # authors: Toi
 
 enabled_site_setting :game_sheet_enabled
@@ -71,9 +71,14 @@ after_initialize do
         item = doc.at_xpath('//item')
         return { error: "Non trouvé" } unless item
         
-        # On récupère TOUTES les vidéos, le filtrage se fera dans le composant JS
+        # Extraction complète des vidéos avec catégorie et langue pour le filtrage JS
         videos = doc.xpath('//video').map do |v|
-          { title: v['title'], link: v['link'] }
+          {
+            title: v['title'],
+            link: v['link'],
+            category: v['category'],
+            language: v['language']
+          }
         end
         
         {
