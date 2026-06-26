@@ -112,13 +112,12 @@ export default class GameSheetMain extends Component {
   }
 
   <template>
-    {{! TOUT le contenu est dans UN SEUL div racine }}
     <div style="padding:20px; max-width: 900px; margin: auto;">
       <h1>Créateur de fiches de jeux</h1>
       
       <div style="display:flex; gap:10px; margin-bottom:20px;">
-        <Input type="text" placeholder="Rechercher un jeu..." 
-               @value={{this.query}}
+        <input type="text" placeholder="Rechercher un jeu..." 
+               value={{this.query}}
                {{on "input" this.updateQuery}}
                style="flex:1; padding:10px; border-radius:5px; border:1px solid #ccc;" />
       </div>
@@ -189,7 +188,7 @@ export default class GameSheetMain extends Component {
 
           <h3 style="margin-top:20px;">Ajouter une vidéo YouTube</h3>
           <div style="display:flex; gap:10px;">
-            <Input type="text" placeholder="Coller le lien YouTube ici..." 
+            <input type="text" placeholder="Coller le lien YouTube ici..." 
                    style="flex:1; padding:10px; border-radius:5px; border:1px solid #ccc;" />
             <button type="button" {{on "click" this.addVideo}} class="btn">Ajouter</button>
           </div>
@@ -212,7 +211,7 @@ export default class GameSheetMain extends Component {
             <h4>Options du sujet</h4>
             
             <label style="display:block; margin-bottom:10px;">
-              <Input type="checkbox" @checked={{this.includeImage}} {{on "change" (fn (mut this.includeImage) (not this.includeImage))}} />
+              <input type="checkbox" checked={{this.includeImage}} {{on "change" this.toggleIncludeImage}} />
               Inclure l'image principale
             </label>
 
