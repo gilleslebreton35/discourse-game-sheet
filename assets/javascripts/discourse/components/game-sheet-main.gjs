@@ -235,17 +235,18 @@ export default class GameSheetMain extends Component {
             <button type="button" {{on "click" this.addVideo}} class="btn">Ajouter</button>
           </div>
 
-        {{#if this.selectedGame.videos.length}}
-            <h3 style="margin-top:20px;">Vidéos (Règles & Critiques)</h3>
-            <ul style="list-style:none; padding:0;">
+       {{#if this.selectedGame.videos.length}}
+            <h3 style="margin-top:20px;">Choisir les vidéos (Français uniquement)</h3>
+            <div style="background:white; padding:10px; border-radius:5px; border:1px solid #ddd;">
               {{#each this.selectedGame.videos as |video|}}
-                <li style="margin-bottom:5px;">
-                  <a href={{video.link}} target="_blank" style="color: #0088cc;">
-                    ▶ {{video.title}}
-                  </a>
-                </li>
+                <label style="display:block; margin-bottom:5px;">
+                  <input type="checkbox" 
+                         checked={{this.isFieldChecked video.link}} 
+                         {{on "change" (fn this.toggleVideo video)}} />
+                  {{video.title}}
+                </label>
               {{/each}}
-            </ul>
+            </div>
           {{/if}}
 
           <div style="margin-top:20px; padding:15px; background:white; border-radius:5px;">
