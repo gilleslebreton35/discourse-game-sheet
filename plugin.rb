@@ -1,6 +1,6 @@
 # name: discourse-game-sheet
 # about: Plugin pour créer des fiches de jeux depuis BGG
-# version: 0.7
+# version: 0.7.1
 # authors: Toi
 
 enabled_site_setting :game_sheet_enabled
@@ -71,10 +71,10 @@ after_initialize do
         item = doc.at_xpath('//item')
         return { error: "Non trouvé" } unless item
         
-        # Filtrage des vidéos en Français uniquement
+        # On récupère TOUTES les vidéos, le filtrage se fera dans le composant JS
         videos = doc.xpath('//video').map do |v|
           { title: v['title'], link: v['link'] }
-        end.select { |v| v[:title] =~ /FR|Français/i }
+        end
         
         {
           id: id,
@@ -108,7 +108,6 @@ after_initialize do
       game = DiscourseGameSheet::BggClient.game_details(params[:game_id])
       return render json: { error: game[:error] }, status: 400 if game[:error]
       
-      # Récupération des vidéos envoyées par le JS
       selected_videos = params[:selected_videos].present? ? JSON.parse(params[:selected_videos]) : []
       
       raw = <<~MARKDOWN
