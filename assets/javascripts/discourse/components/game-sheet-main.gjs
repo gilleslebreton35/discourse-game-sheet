@@ -71,6 +71,14 @@ export default class GameSheetMain extends Component {
       {{#if this.selectedGame}}
         <div style="margin-top:20px; padding:20px; border:1px solid #ccc;">
           <h2>{{this.selectedGame.name}}</h2>
+          
+          {{!-- Nouvel affichage des infos techniques --}}
+          <div style="background:#f4f4f4; padding:10px; margin-bottom:15px; border-radius:5px;">
+             <strong>Joueurs :</strong> {{this.selectedGame.min_players}} - {{this.selectedGame.max_players}}<br>
+             <strong>Durée :</strong> {{this.selectedGame.playing_time}} minutes<br>
+             <strong>Âge :</strong> {{this.selectedGame.min_age}}+ ans
+          </div>
+
           {{#if this.selectedGame.image}}
             <img src={{this.selectedGame.image}} width="300" alt="game-cover" />
           {{/if}}
@@ -80,13 +88,10 @@ export default class GameSheetMain extends Component {
           </div>
 
           <label>Catégorie :</label>
-          {{!-- On lie la valeur du select à destinationCategory --}}
           <select {{on "change" this.updateCategory}} value={{this.destinationCategory}}>
             <option value="">Choisir une catégorie</option>
             {{#each this.categories as |cat|}}
-              <option value={{cat.id}}>
-                {{cat.name}}
-              </option>
+              <option value={{cat.id}}>{{cat.name}}</option>
             {{/each}}
           </select>
 
