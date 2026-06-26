@@ -5,15 +5,25 @@
 
 enabled_site_setting :game_sheet_enabled
 
-register_site_setting :game_sheet_bgg_api_key, default: "", validator: "NoOptionsValidator"
-register_site_setting :game_sheet_allowed_category_ids, default: "", validator: "NoOptionsValidator"
-
 after_initialize do
   require_dependency "application_controller"
   require 'nokogiri'
   require 'net/http'
   require 'uri'
   require 'erb'
+
+  # Ajout des settings personnalisés dans la base de données
+  # On utilise add_model_scope pour enregistrer les settings
+  SiteSetting.refresh!
+  
+  # Création des settings s'ils n'existent pas encore
+  unless SiteSetting.where(name: "game_sheet_bgg_api_key").exists?
+    SiteSetting.create!(name: "game_sheet_bgg_api_key", data_type: 1, value: "")
+  end
+  
+  unless SiteSetting.where(name: "game_sheet_allowed_category_ids").exists?
+    SiteSetting.create!(name: "game_sheet_allowed_category_ids", data_type: 1, value: "")
+  end
 
   module ::DiscourseGameSheet
     class BggClient
@@ -32,7 +42,6 @@ after_initialize do
         request = Net::HTTP::Get.new(uri.request_uri)
         request["User-Agent"] = "Discourse-GameSheet/1.0"
         
-        # Ajout du token si présent
         if api_key
           request["Authorization"] = "Bearer #{api_key}"
         end
