@@ -3,7 +3,7 @@ import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
 import { on } from "@ember/modifier";
 import { fn } from "@ember/helper";
-import { eq, not, and } from "@ember/helper";
+import { eq, not } from "@ember/helper";
 import { debounce } from "@ember/runloop";
 import { ajax } from "discourse/lib/ajax";
 import { popupAjaxError } from "discourse/lib/ajax-error";
@@ -42,7 +42,7 @@ export default class GameSheetMain extends Component {
 
   @action
   async selectGame(event) {
-    const gameId = event.target.dataset.id;
+    const gameId = event.currentTarget.dataset.id;
     this.selectedGame = await ajax(`/game-sheet-api/details/${gameId}`);
     this.selectedImages = [];
     this.selectedVideos = [];
@@ -66,7 +66,7 @@ export default class GameSheetMain extends Component {
 
   @action
   addVideo(event) {
-    const input = event.target.previousElementSibling;
+    const input = event.currentTarget.closest("div").querySelector('input[type="text"]');
     const url = input.value.trim();
     if (url && !this.selectedVideos.includes(url)) {
       this.selectedVideos = [...this.selectedVideos, url];
@@ -112,11 +112,13 @@ export default class GameSheetMain extends Component {
   }
 
   <template>
+    {{! TOUT le contenu est dans UN SEUL div racine }}
     <div style="padding:20px; max-width: 900px; margin: auto;">
       <h1>Créateur de fiches de jeux</h1>
       
       <div style="display:flex; gap:10px; margin-bottom:20px;">
-        <input type="text" placeholder="Rechercher un jeu..." 
+        <Input type="text" placeholder="Rechercher un jeu..." 
+               @value={{this.query}}
                {{on "input" this.updateQuery}}
                style="flex:1; padding:10px; border-radius:5px; border:1px solid #ccc;" />
       </div>
@@ -125,22 +127,26 @@ export default class GameSheetMain extends Component {
         <p>Recherche en cours...</p>
       {{/if}}
 
-      {{#each this.results as |game|}}
-        <div style="padding:10px; border-bottom:1px solid #eee; display:flex; align-items:center; gap:15px;">
-          {{#if game.thumbnail}}
-            <img src={{game.thumbnail}} alt="" style="width:50px; height:50px; object-fit:cover; border-radius:5px;" />
-          {{/if}}
-          <div style="flex:1;">
-            <strong>{{game.name}}</strong>
-            {{#if game.yearpublished}}
-              <span style="color:#888;">({{game.yearpublished}})</span>
-            {{/if}}
-          </div>
-          <button type="button" data-id={{game.id}} {{on "click" this.selectGame}} class="btn btn-primary btn-small">
-            Choisir
-          </button>
+      {{#if this.results.length}}
+        <div>
+          {{#each this.results as |game|}}
+            <div style="padding:10px; border-bottom:1px solid #eee; display:flex; align-items:center; gap:15px;">
+              {{#if game.thumbnail}}
+                <img src={{game.thumbnail}} alt="" style="width:50px; height:50px; object-fit:cover; border-radius:5px;" />
+              {{/if}}
+              <div style="flex:1;">
+                <strong>{{game.name}}</strong>
+                {{#if game.yearpublished}}
+                  <span style="color:#888;">({{game.yearpublished}})</span>
+                {{/if}}
+              </div>
+              <button type="button" data-id={{game.id}} {{on "click" this.selectGame}} class="btn btn-primary btn-small">
+                Choisir
+              </button>
+            </div>
+          {{/each}}
         </div>
-      {{/each}}
+      {{/if}}
 
       {{#if this.selectedGame}}
         <div style="margin-top:20px; padding:25px; border:1px solid #ddd; border-radius:10px; background-color:#f9f9f9;">
@@ -175,14 +181,7 @@ export default class GameSheetMain extends Component {
               {{#each this.selectedGame.images as |imgUrl|}}
                 <div style="position:relative; cursor:pointer;" {{on "click" (fn this.toggleImage imgUrl)}}>
                   <img src={{imgUrl}} alt="" 
-                       style="width:120px; height:120px; object-fit:cover; border-radius:5px; 
-                              {{#if (this.selectedImages.includes imgUrl)}}border:3px solid #0088cc;{{else}}border:2px solid #ddd;{{/if}}" />
-                  {{#if (this.selectedImages.includes imgUrl)}}
-                    <div style="position:absolute; top:5px; right:5px; background:#0088cc; color:white; 
-                                border-radius:50%; width:20px; height:20px; text-align:center; line-height:20px; font-size:12px;">
-                      ✓
-                    </div>
-                  {{/if}}
+                       style="width:120px; height:120px; object-fit:cover; border-radius:5px;" />
                 </div>
               {{/each}}
             </div>
@@ -190,7 +189,7 @@ export default class GameSheetMain extends Component {
 
           <h3 style="margin-top:20px;">Ajouter une vidéo YouTube</h3>
           <div style="display:flex; gap:10px;">
-            <input type="text" placeholder="Coller le lien YouTube ici..." 
+            <Input type="text" placeholder="Coller le lien YouTube ici..." 
                    style="flex:1; padding:10px; border-radius:5px; border:1px solid #ccc;" />
             <button type="button" {{on "click" this.addVideo}} class="btn">Ajouter</button>
           </div>
@@ -213,7 +212,7 @@ export default class GameSheetMain extends Component {
             <h4>Options du sujet</h4>
             
             <label style="display:block; margin-bottom:10px;">
-              <input type="checkbox" checked={{this.includeImage}} {{on "change" (fn (mut this.includeImage) (not this.includeImage))}} />
+              <Input type="checkbox" @checked={{this.includeImage}} {{on "change" (fn (mut this.includeImage) (not this.includeImage))}} />
               Inclure l'image principale
             </label>
 
@@ -222,7 +221,7 @@ export default class GameSheetMain extends Component {
               <select {{on "change" this.updateCategory}} style="width:100%; padding:10px; margin-top:5px;">
                 <option value="">-- Choisir la catégorie --</option>
                 {{#each this.categories as |cat|}}
-                  <option value={{cat.id}} selected={{eq this.destinationCategory cat.id}}>
+                  <option value={{cat.id}}>
                     {{cat.name}}
                   </option>
                 {{/each}}
