@@ -1,6 +1,6 @@
 # name: discourse-game-sheet
 # about: Plugin pour créer des fiches de jeux depuis BGG
-# version: 0.1
+# version: 0.2
 # authors: Toi
 
 enabled_site_setting :game_sheet_enabled
@@ -17,12 +17,12 @@ after_initialize do
     class BggClient
       # Recherche les jeux par nom
       def self.search(query)
-        return { bgg: [] } if query.blank?
+        # On ajoute un message de débug pour savoir ce qui se passe
+        return { bgg: [], debug_msg: "Le terme de recherche reçu par le serveur est vide." } if query.blank?
 
-        encoded_query = ERB::Util.url_encode(query)
+        encoded_query = ERB::Util.url_encode(query.to_s.strip)
         uri = URI.parse("https://boardgamegeek.com/xmlapi2/search?query=#{encoded_query}&type=boardgame")
         
-        # On utilise Net::HTTP pour pouvoir envoyer un faux User-Agent de navigateur
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
         request = Net::HTTP::Get.new(uri.request_uri)
@@ -34,7 +34,6 @@ after_initialize do
           if response.is_a?(Net::HTTPSuccess)
             doc = Nokogiri::XML(response.body)
             
-            # Mapping du XML vers un objet Ruby avec protections
             results = doc.xpath('//item').map do |item|
               name_node = item.at_xpath('name')
               year_node = item.at_xpath('yearpublished')
@@ -46,14 +45,12 @@ after_initialize do
               }
             end
             
-            { bgg: results.first(10) }
+            { bgg: results.first(10), debug_msg: "Succès : #{results.size} jeux trouvés." }
           else
-            Rails.logger.error("Erreur BGG Search HTTP: #{response.code}")
-            { bgg: [] }
+            { bgg: [], debug_msg: "BGG a rejeté la connexion avec l'erreur HTTP: #{response.code}" }
           end
         rescue => e
-          Rails.logger.error("Erreur BGG Search Crash: #{e.message}")
-          { bgg: [] }
+          { bgg: [], debug_msg: "Le serveur Ruby a crashé : #{e.message}" }
         end
       end
 
@@ -88,11 +85,10 @@ after_initialize do
               yearpublished: year_node ? year_node['value'] : "N/A"
             }
           else
-            { error: "BGG indisponible" }
+            { error: "BGG indisponible (#{response.code})" }
           end
         rescue => e
-          Rails.logger.error("Erreur BGG Details Crash: #{e.message}")
-          { error: "Erreur serveur" }
+          { error: "Erreur serveur : #{e.message}" }
         end
       end
     end
@@ -102,13 +98,18 @@ after_initialize do
   class ::GameSheetController < ::ApplicationController
     requires_plugin "discourse-game-sheet"
     before_action :ensure_logged_in
+    
+    # CRUCIAL : Empêche Discourse de bloquer ta requête JSON si elle ne contient pas les bons en-têtes
+    skip_before_action :check_xhr, only: [:index, :search, :details]
 
     def index
       render html: "", layout: true
     end
 
     def search
-      render json: DiscourseGameSheet::BggClient.search(params[:q])
+      # CRUCIAL : On accepte "q" OU "query" pour être sûr de ne rien rater
+      term = params[:q].presence || params[:query].presence
+      render json: DiscourseGameSheet::BggClient.search(term)
     end
 
     def details
@@ -116,13 +117,11 @@ after_initialize do
     end
 
     def create_topic
-      # Logique de création de sujet
       game = DiscourseGameSheet::BggClient.game_details(params[:game_id])
       
-      return render json: { error: "Impossible de récupérer les détails du jeu" }, status: 400 if game[:error]
+      return render json: { error: game[:error] }, status: 400 if game[:error]
       
-      # Exemple de corps de message (si pas d'image, on l'omet pour éviter un affichage cassé)
-      image_markdown = game[:image] ? "![image|600](#{game[:image]})\n\n" : ""
+      image_markdown = game[:image].present? ? "![image|600](#{game[:image]})\n\n" : ""
       raw = "#{image_markdown}### Description\n#{game[:description]}"
       
       post_creator = PostCreator.new(
