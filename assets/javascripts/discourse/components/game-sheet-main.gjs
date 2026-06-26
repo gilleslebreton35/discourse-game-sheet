@@ -2,6 +2,8 @@ import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
 import { on } from "@ember/modifier";
+import { fn } from "@ember/helper";
+import { eq, not, and } from "@ember/helper";
 import { debounce } from "@ember/runloop";
 import { ajax } from "discourse/lib/ajax";
 import { popupAjaxError } from "discourse/lib/ajax-error";
@@ -45,7 +47,6 @@ export default class GameSheetMain extends Component {
     this.selectedImages = [];
     this.selectedVideos = [];
     
-    // Chargement des catégories autorisées
     try {
       const cats = await ajax("/game-sheet-api/categories");
       this.categories = cats;
@@ -65,11 +66,12 @@ export default class GameSheetMain extends Component {
 
   @action
   addVideo(event) {
-    const url = event.target.previousElementSibling.value.trim();
+    const input = event.target.previousElementSibling;
+    const url = input.value.trim();
     if (url && !this.selectedVideos.includes(url)) {
       this.selectedVideos = [...this.selectedVideos, url];
     }
-    event.target.previousElementSibling.value = "";
+    input.value = "";
   }
 
   @action
@@ -113,14 +115,12 @@ export default class GameSheetMain extends Component {
     <div style="padding:20px; max-width: 900px; margin: auto;">
       <h1>Créateur de fiches de jeux</h1>
       
-      {{!-- Barre de recherche --}}
       <div style="display:flex; gap:10px; margin-bottom:20px;">
         <input type="text" placeholder="Rechercher un jeu..." 
                {{on "input" this.updateQuery}}
                style="flex:1; padding:10px; border-radius:5px; border:1px solid #ccc;" />
       </div>
 
-      {{!-- Résultats de recherche --}}
       {{#if this.loading}}
         <p>Recherche en cours...</p>
       {{/if}}
@@ -143,7 +143,6 @@ export default class GameSheetMain extends Component {
       {{/each}}
 
       {{#if this.selectedGame}}
-        {{!-- Carte de détails du jeu --}}
         <div style="margin-top:20px; padding:25px; border:1px solid #ddd; border-radius:10px; background-color:#f9f9f9;">
           
           <div style="display:flex; gap:20px;">
@@ -165,13 +164,11 @@ export default class GameSheetMain extends Component {
             </div>
           </div>
 
-          {{!-- Description --}}
           <h3>Description</h3>
           <div style="background:white; padding:15px; border-radius:5px; max-height:300px; overflow-y:auto;">
             {{{this.selectedGame.description}}}
           </div>
 
-          {{!-- Images supplémentaires --}}
           {{#if this.selectedGame.images.length}}
             <h3 style="margin-top:20px;">Images du jeu</h3>
             <div style="display:flex; flex-wrap:wrap; gap:10px;">
@@ -191,7 +188,6 @@ export default class GameSheetMain extends Component {
             </div>
           {{/if}}
 
-          {{!-- Vidéos --}}
           <h3 style="margin-top:20px;">Ajouter une vidéo YouTube</h3>
           <div style="display:flex; gap:10px;">
             <input type="text" placeholder="Coller le lien YouTube ici..." 
@@ -213,7 +209,6 @@ export default class GameSheetMain extends Component {
             </div>
           {{/if}}
 
-          {{!-- Options de création --}}
           <div style="margin-top:20px; padding:15px; background:white; border-radius:5px;">
             <h4>Options du sujet</h4>
             
@@ -235,7 +230,6 @@ export default class GameSheetMain extends Component {
             </label>
           </div>
 
-          {{!-- Bouton de création --}}
           <button type="button" {{on "click" this.createTopic}} 
                   class="btn btn-primary" 
                   disabled={{this.creating}}
