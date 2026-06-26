@@ -11,22 +11,31 @@ after_initialize do
   require 'net/http'
   require 'uri'
 
-  # 1. Module de logique BGG
   module ::DiscourseGameSheet
     class BggClient
       BASE_URL = "https://boardgamegeek.com/xmlapi2"
+      # Remplace par ton token réel
+      BGG_TOKEN = "a904f3bf-f154-4890-9618-4dc3835e40c7" 
 
       def self.request_bgg(path)
+        sleep 1 # Anti-spam BGG
         uri = URI.parse("#{BASE_URL}/#{path}")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
+        
         request = Net::HTTP::Get.new(uri.request_uri)
         request["User-Agent"] = "Discourse-GameSheet"
+        # Injection du token dans le header comme demandé
+        request["Authorization"] = "Bearer #{BGG_TOKEN}" 
         
-        response = http.request(request)
-        # Log pour débogage
-        Rails.logger.warn("BGG REQUEST: #{uri} | STATUS: #{response.code}")
-        response
+        begin
+          response = http.request(request)
+          Rails.logger.warn("BGG LOG: #{uri} | Status: #{response.code}")
+          response
+        rescue => e
+          Rails.logger.error("BGG ERROR: #{e.message}")
+          nil
+        end
       end
 
       def self.search(query)
@@ -35,33 +44,20 @@ after_initialize do
         encoded_query = ERB::Util.url_encode(query.to_s.strip)
         resp = request_bgg("search?query=#{encoded_query}&type=boardgame")
         
-        # LOG CRITIQUE : Affiche tout ce que BGG nous envoie
-        Rails.logger.warn("DEBUG BGG FULL RESPONSE: #{resp.body}")
-        
-        unless resp.is_a?(Net::HTTPSuccess)
-          Rails.logger.warn("DEBUG BGG: Request failed with status #{resp.code}")
-          return { bgg: [] }
-        end
+        return { bgg: [] } if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
         
         doc = Nokogiri::XML(resp.body)
         items = doc.xpath('//item')
         
-        Rails.logger.warn("DEBUG BGG: Found #{items.count} items in XML")
+        # LOGS DE CONTROLE
+        Rails.logger.warn("BGG SEARCH: Reçu #{items.count} items pour '#{query}'")
         
+        return { bgg: [] } if items.empty?
+
         ids = items.map { |i| i['id'] }.first(10)
         
-        if ids.empty?
-          Rails.logger.warn("DEBUG BGG: No IDs extracted! Check XML structure.")
-          return { bgg: [] }
-        end
-
-        Rails.logger.warn("DEBUG BGG: Attempting to fetch details for IDs: #{ids.join(',')}")
-
         resp_details = request_bgg("thing?id=#{ids.join(',')}")
-        unless resp_details.is_a?(Net::HTTPSuccess)
-          Rails.logger.warn("DEBUG BGG: Details request failed")
-          return { bgg: [] }
-        end
+        return { bgg: [] } if resp_details.nil? || !resp_details.is_a?(Net::HTTPSuccess)
         
         details_doc = Nokogiri::XML(resp_details.body)
         results = details_doc.xpath('//item').map do |item|
@@ -72,14 +68,12 @@ after_initialize do
             image: item.at_xpath('thumbnail')&.text
           }
         end
-        
-        Rails.logger.warn("DEBUG BGG: Final results count: #{results.count}")
         { bgg: results }
       end
 
       def self.game_details(id)
         resp = request_bgg("thing?id=#{id}&stats=1")
-        return { error: "Non trouvé" } unless resp.is_a?(Net::HTTPSuccess)
+        return { error: "Non trouvé" } if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
         
         doc = Nokogiri::XML(resp.body)
         item = doc.at_xpath('//item')
@@ -96,7 +90,6 @@ after_initialize do
     end
   end
 
-  # 2. Contrôleur
   class ::GameSheetController < ::ApplicationController
     requires_plugin "discourse-game-sheet"
     before_action :ensure_logged_in
@@ -131,7 +124,6 @@ after_initialize do
     end
   end
 
-  # 3. Routes
   Discourse::Application.routes.append do
     get "/game-sheet" => "game_sheet#index"
     get "/game-sheet-api/search" => "game_sheet#search"
