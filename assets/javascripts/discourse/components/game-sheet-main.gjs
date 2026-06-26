@@ -16,7 +16,7 @@ export default class GameSheetMain extends Component {
   @tracked selectedVideos = [];
   @tracked loading = false;
   @tracked creating = false;
-  @tracked languageFilter = "ALL"; // Nouveau filtre
+  @tracked languageFilter = "ALL";
 
   get filteredVideos() {
     if (!this.selectedGame?.videos) return [];
@@ -29,6 +29,12 @@ export default class GameSheetMain extends Component {
   @action
   updateLanguage(event) {
     this.languageFilter = event.target.value;
+  }
+
+  // NOUVELLE ACTION POUR LA CATEGORIE
+  @action
+  setCategory(event) {
+    this.destinationCategory = event.target.value;
   }
 
   @action
@@ -132,7 +138,8 @@ export default class GameSheetMain extends Component {
             {{/each}}
           </div>
 
-          <select {{on "change" (fn (mut this.destinationCategory) event.target.value)}} style="width:100%; margin:20px 0;">
+          {{! APPEL DE LA NOUVELLE ACTION setCategory }}
+          <select {{on "change" this.setCategory}} style="width:100%; margin:20px 0;">
             <option value="">-- Catégorie --</option>
             {{#each this.categories as |cat|}} <option value={{cat.id}}>{{cat.name}}</option> {{/each}}
           </select>
