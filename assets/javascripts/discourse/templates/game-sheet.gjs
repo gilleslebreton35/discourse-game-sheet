@@ -1,8 +1,12 @@
-const GameSheetTemplate = <template>
-  <div style="padding: 50px; text-align: center; margin-top: 50px;">
-    <h1>🔥 LA ROUTE FONCTIONNE 🔥</h1>
-    <p>Si tu vois ce texte, c'est que la route est bonne mais que ton composant GameSheetMain fait tout planter !</p>
-  </div>
-</template>;
+{{! assets/javascripts/discourse/templates/game-sheet.gjs
+  Ce fichier est le template de la route "game-sheet".
+  Son nom doit correspondre exactement au nom de la route déclarée
+  dans discourse-route-map.js (ici "game-sheet").
+  Il doit vivre dans assets/javascripts/discourse/templates/
+}}
 
-export default GameSheetTemplate;
+import GameSheetMain from "../components/game-sheet-main";
+
+<template>
+  <GameSheetMain />
+</template>

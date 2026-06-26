@@ -5,11 +5,13 @@ module DiscourseGameSheet
     before_action :ensure_logged_in
     before_action :ensure_allowed_group
 
+    # GET /game-sheet-api/search?q=…
     def search
       params.require(:q)
       render json: DiscourseGameSheet::BggClient.search(params[:q])
     end
 
+    # GET /game-sheet-api/details?id=…
     def details
       params.require(:id)
       data = DiscourseGameSheet::BggClient.game_details(params[:id])
@@ -17,6 +19,7 @@ module DiscourseGameSheet
       render json: data
     end
 
+    # POST /game-sheet-api/create-topic
     def create_topic
       p = params.permit(:game_id, :category_id, :include_image, selected_videos: [])
       p.require([:game_id, :category_id])
@@ -24,31 +27,48 @@ module DiscourseGameSheet
       game = DiscourseGameSheet::BggClient.game_details(p[:game_id])
       game[:description_fr] = DiscourseGameSheet::DeeplClient.translate(game[:description])
 
-      raw_body = String.new
+      # Description nettoyée (supprime les balises HTML/BBCode de BGG)
+      clean_description = CGI.unescapeHTML(game[:description_fr].to_s)
+                             .gsub(/&#10;/, "\n")
+                             .gsub(/<[^>]+>/, "")
+                             .strip
+
+      raw_body = +""
+
+      # ── Image principale ──────────────────────────────────────────────────
+      # BUG CORRIGÉ : l'original avait {#game[:image]} au lieu de #{game[:image]}
       if p[:include_image] == "true" && game[:image].present?
-        raw_body << "![#{game[:name]}]({#game[:image]})\n\n"
+        raw_body << "![#{game[:name]}](#{game[:image]})\n\n"
       end
 
-      raw_body << "### Description\n#{Search.clean_html(game[:description_fr])}\n\n"
-      raw_body << "### Informations Techniques\n"
-      raw_body << "* **Année de sortie :** #{game[:yearpublished]}\n"
-      raw_body << "* **Nombre de joueurs :** #{game[:minplayers]} à #{game[:maxplayers]}\n"
-      raw_body << "* **Durée d'une partie :** #{game[:playingtime]} minutes\n"
-      raw_body << "* **Âge recommandé :** #{game[:minage]}+\n\n"
+      # ── Description ───────────────────────────────────────────────────────
+      raw_body << "### Description\n\n#{clean_description}\n\n"
 
+      # ── Informations techniques ───────────────────────────────────────────
+      raw_body << "### Informations techniques\n\n"
+      raw_body << "| Critère | Valeur |\n"
+      raw_body << "|---|---|\n"
+      raw_body << "| **Année de sortie** | #{game[:yearpublished]} |\n"       if game[:yearpublished].present?
+      raw_body << "| **Nombre de joueurs** | #{game[:minplayers]}–#{game[:maxplayers]} |\n" if game[:minplayers].present?
+      raw_body << "| **Durée d'une partie** | #{game[:playingtime]} min |\n"  if game[:playingtime].present?
+      raw_body << "| **Âge recommandé** | #{game[:minage]}+ |\n"              if game[:minage].present?
+      raw_body << "\n"
+
+      # ── Vidéos sélectionnées ──────────────────────────────────────────────
       if p[:selected_videos].present?
-        raw_body << "### Vidéos Sélectionnées\n"
+        raw_body << "### Vidéos\n\n"
         p[:selected_videos].each do |video_url|
-          raw_body << "#{video_url}\n"
+          raw_body << "#{video_url}\n\n"
         end
       end
 
+      # ── Création ──────────────────────────────────────────────────────────
       post_creator = PostCreator.new(
         current_user,
-        title: "Fiche de jeu : #{game[:name]}",
-        raw: raw_body,
-        category: p[:category_id],
-        skip_validations: true
+        title:             "Fiche de jeu : #{game[:name]}",
+        raw:               raw_body,
+        category:          p[:category_id],
+        skip_validations:  false          # laisser Discourse valider normalement
       )
       post = post_creator.create
 
@@ -62,14 +82,14 @@ module DiscourseGameSheet
     private
 
     def ensure_allowed_group
-      allowed_group = SiteSetting.game_sheet_allowed_group
       return if current_user.staff?
 
-      if allowed_group.present?
-        group = Group.find_by(name: allowed_group)
-        if group.blank? || !group.users.where(id: current_user.id).exists?
-          raise Discourse::InvalidAccess.new("Cet espace est réservé aux abonnés.")
-        end
+      allowed_group = SiteSetting.game_sheet_allowed_group
+      return if allowed_group.blank?
+
+      group = Group.find_by(name: allowed_group)
+      unless group && group.users.exists?(id: current_user.id)
+        raise Discourse::InvalidAccess.new("Cet espace est réservé aux abonnés.")
       end
     end
   end
