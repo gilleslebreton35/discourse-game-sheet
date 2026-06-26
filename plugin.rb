@@ -9,6 +9,7 @@ enabled_site_setting :game_sheet_enabled
 
 # Enregistrement de la feuille de style
 register_asset "stylesheets/game-sheet.scss"
+register_asset "javascripts/discourse/discourse-route-map.js"
 
 after_initialize do
   # 1. Définition du module pour l'API
