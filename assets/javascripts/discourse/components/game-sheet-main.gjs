@@ -14,28 +14,30 @@ export default class GameSheetMain extends Component {
   @tracked categories = [];
   @tracked destinationCategory = "";
   @tracked selectedVideos = [];
-  @tracked loading = false;
   @tracked creating = false;
+  
   @tracked languageFilter = "ALL";
+  @tracked categoryFilter = "ALL";
 
   get filteredVideos() {
     if (!this.selectedGame?.videos) return [];
-    if (this.languageFilter === "ALL") return this.selectedGame.videos;
-    return this.selectedGame.videos.filter(v => 
-      v.title.match(/FR|Français|VF|VOSTFR/i)
-    );
+    return this.selectedGame.videos.filter(v => {
+      const matchesLang = (this.languageFilter === "ALL" || v.language === this.languageFilter);
+      const matchesCat = (this.categoryFilter === "ALL" || v.category === this.categoryFilter);
+      return matchesLang && matchesCat;
+    });
   }
 
-  @action
-  updateLanguage(event) {
-    this.languageFilter = event.target.value;
-  }
-
-  // NOUVELLE ACTION POUR LA CATEGORIE
   @action
   setCategory(event) {
     this.destinationCategory = event.target.value;
   }
+
+  @action
+  updateLanguage(event) { this.languageFilter = event.target.value; }
+
+  @action
+  updateCategoryFilter(event) { this.categoryFilter = event.target.value; }
 
   @action
   updateQuery(event) {
@@ -50,11 +52,7 @@ export default class GameSheetMain extends Component {
     try {
       const res = await ajax(`/game-sheet-api/search?q=${encodeURIComponent(this.query)}`);
       this.results = res.bgg || [];
-    } catch(e) {
-      popupAjaxError(e);
-    } finally {
-      this.loading = false;
-    }
+    } catch(e) { popupAjaxError(e); } finally { this.loading = false; }
   }
 
   @action
@@ -62,17 +60,11 @@ export default class GameSheetMain extends Component {
     const gameId = event.currentTarget.dataset.id;
     this.selectedGame = await ajax(`/game-sheet-api/details/${gameId}`);
     this.selectedVideos = [];
-    try {
-      this.categories = await ajax("/game-sheet-api/categories");
-    } catch(e) {
-      this.categories = [];
-    }
+    try { this.categories = await ajax("/game-sheet-api/categories"); } catch(e) { this.categories = []; }
   }
 
   @action
-  isFieldChecked(link) {
-    return this.selectedVideos.some(v => v.link === link);
-  }
+  isFieldChecked(link) { return this.selectedVideos.some(v => v.link === link); }
 
   @action
   toggleVideo(video, event) {
@@ -97,17 +89,12 @@ export default class GameSheetMain extends Component {
         }
       });
       window.location.href = res.topic_url;
-    } catch(e) {
-      popupAjaxError(e);
-    } finally {
-      this.creating = false;
-    }
+    } catch(e) { popupAjaxError(e); } finally { this.creating = false; }
   }
 
   <template>
     <div style="padding:20px; max-width: 900px; margin: auto;">
       <h1>Créateur de fiches de jeux</h1>
-      
       <input type="text" placeholder="Rechercher..." value={{this.query}} {{on "input" this.updateQuery}} style="width:100%; padding:10px; margin-bottom:20px;" />
 
       {{#each this.results as |game|}}
@@ -123,24 +110,31 @@ export default class GameSheetMain extends Component {
           <h2>{{this.selectedGame.name}}</h2>
           
           <h3>Vidéos</h3>
-          <label><strong>Filtrer par langue :</strong></label>
-          <select {{on "change" this.updateLanguage}}>
-            <option value="ALL">Toutes</option>
-            <option value="FR">Français (FR/VF)</option>
-          </select>
+          <div style="display:flex; gap:10px; margin-bottom:10px;">
+            <select {{on "change" this.updateLanguage}}>
+              <option value="ALL">Toutes langues</option>
+              <option value="French">Français</option>
+              <option value="English">Anglais</option>
+            </select>
+            <select {{on "change" this.updateCategoryFilter}}>
+              <option value="ALL">Toutes catégories</option>
+              <option value="instructional">Règles</option>
+              <option value="review">Critiques</option>
+              <option value="session">Parties</option>
+            </select>
+          </div>
 
           <div style="margin-top:10px; max-height:200px; overflow-y:auto;">
             {{#each this.filteredVideos as |video|}}
               <label style="display:block;">
                 <input type="checkbox" checked={{this.isFieldChecked video.link}} {{on "change" (fn this.toggleVideo video)}} />
-                {{video.title}}
+                {{video.title}} ({{video.language}})
               </label>
             {{/each}}
           </div>
 
-          {{! APPEL DE LA NOUVELLE ACTION setCategory }}
           <select {{on "change" this.setCategory}} style="width:100%; margin:20px 0;">
-            <option value="">-- Catégorie --</option>
+            <option value="">-- Catégorie destination --</option>
             {{#each this.categories as |cat|}} <option value={{cat.id}}>{{cat.name}}</option> {{/each}}
           </select>
 
