@@ -90,8 +90,8 @@ after_initialize do
     get "/game-sheet" => "game_sheet#index"
     
     # Routes API
-    get "/game-sheet/search" => "game_sheet#search"
-    get "/game-sheet/details/:id" => "game_sheet#details"
-    post "/game-sheet/create_topic" => "game_sheet#create_topic"
+    get "/game-sheet-api/search" => "game_sheet#search"
+    get "/game-sheet-api/details/:id" => "game_sheet#details"
+    post "/game-sheet-api/create_topic" => "game_sheet#create_topic"
   end
 end
