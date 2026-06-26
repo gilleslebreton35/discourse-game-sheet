@@ -40,26 +40,33 @@ after_initialize do
         return { bgg: [] } if query.blank?
         
         encoded_query = ERB::Util.url_encode(query.to_s.strip)
+        # 1. On cherche les jeux
         resp = request_bgg("search?query=#{encoded_query}&type=boardgame")
-        
         return { bgg: [] } if resp.nil? || !resp.is_a?(Net::HTTPSuccess)
         
         doc = Nokogiri::XML(resp.body)
         items = doc.xpath('//item')
-        
         return { bgg: [] } if items.empty?
 
-        # On transforme le XML en une liste d'objets
-        results = items.first(20).map do |item|
+        # 2. On récupère les 10 premiers IDs
+        ids = items.map { |i| i['id'] }.first(10)
+        
+        # 3. On appelle l'API "thing" pour récupérer les vraies images de ces 10 jeux
+        resp_details = request_bgg("thing?id=#{ids.join(',')}")
+        return { bgg: [] } if resp_details.nil? || !resp_details.is_a?(Net::HTTPSuccess)
+        
+        details_doc = Nokogiri::XML(resp_details.body)
+        
+        # 4. On mappe les résultats avec les images trouvées
+        results = details_doc.xpath('//item').map do |item|
           {
             id: item['id'],
             name: item.at_xpath('name')&.[]('value'),
             yearpublished: item.at_xpath('yearpublished')&.[]('value'),
-            # ICI : On récupère le thumbnail s'il existe dans le résultat de recherche
-            thumbnail: item.at_xpath('thumbnail')&.[]('value') 
+            # Ici, on récupère le 'thumbnail' qui existe dans l'API 'thing'
+            thumbnail: item.at_xpath('thumbnail')&.text 
           }
         end
-        
         { bgg: results }
       end
 
