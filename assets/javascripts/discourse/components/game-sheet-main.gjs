@@ -2,6 +2,7 @@ import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
 import { on } from "@ember/modifier";
+import { fn } from "@ember/helper";
 import { ajax } from "discourse/lib/ajax";
 import { popupAjaxError } from "discourse/lib/ajax-error";
 import discourseDebounce from "discourse/lib/debounce";
@@ -9,7 +10,7 @@ import discourseDebounce from "discourse/lib/debounce";
 export default class GameSheetMain extends Component {
   @tracked query = "";
   @tracked results = [];
-  @tracked filteredResults = [];   // ← Nouveau : résultats filtrés
+  @tracked filteredResults = [];
   @tracked selectedGame = null;
   @tracked categories = [];
   @tracked destinationCategory = "";
