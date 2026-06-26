@@ -235,18 +235,17 @@ export default class GameSheetMain extends Component {
             <button type="button" {{on "click" this.addVideo}} class="btn">Ajouter</button>
           </div>
 
-          {{#if this.selectedVideos.length}}
-            <div style="margin-top:10px;">
-              <h4>Vidéos sélectionnées :</h4>
-              {{#each this.selectedVideos as |video|}}
-                <div style="display:flex; align-items:center; gap:10px; padding:5px; border-bottom:1px solid #eee;">
-                  <span style="flex:1; font-size:0.9em;">{{video}}</span>
-                  <button type="button" {{on "click" (fn this.removeVideo video)}} class="btn btn-danger btn-small">
-                    ✕
-                  </button>
-                </div>
+        {{#if this.selectedGame.videos.length}}
+            <h3 style="margin-top:20px;">Vidéos (Règles & Critiques)</h3>
+            <ul style="list-style:none; padding:0;">
+              {{#each this.selectedGame.videos as |video|}}
+                <li style="margin-bottom:5px;">
+                  <a href={{video.link}} target="_blank" style="color: #0088cc;">
+                    ▶ {{video.title}}
+                  </a>
+                </li>
               {{/each}}
-            </div>
+            </ul>
           {{/if}}
 
           <div style="margin-top:20px; padding:15px; background:white; border-radius:5px;">
