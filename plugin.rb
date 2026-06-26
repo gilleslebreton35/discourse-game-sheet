@@ -6,9 +6,6 @@
 enabled_site_setting :game_sheet_enabled
 
 after_initialize do
-  # 1. Enregistrement des assets (CSS/JS)
-  register_asset "javascripts/discourse/components/game-sheet-main.gjs"
-  register_asset "javascripts/discourse/templates/game-sheet.hbs"
 
   require_dependency "application_controller"
 
