@@ -3,6 +3,7 @@
 # version: 0.6
 
 enabled_site_setting :game_sheet_enabled
+enabled_site_setting :game_sheet_allowed_category_ids
 
 after_initialize do
   require_dependency "application_controller"
