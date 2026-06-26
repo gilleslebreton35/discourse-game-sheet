@@ -49,20 +49,17 @@ after_initialize do
         
         return { bgg: [] } if items.empty?
 
-        ids = items.map { |i| i['id'] }.first(10)
-        
-        resp_details = request_bgg("thing?id=#{ids.join(',')}")
-        return { bgg: [] } if resp_details.nil? || !resp_details.is_a?(Net::HTTPSuccess)
-        
-        details_doc = Nokogiri::XML(resp_details.body)
-        results = details_doc.xpath('//item').map do |item|
+        # On transforme le XML en une liste d'objets
+        results = items.first(20).map do |item|
           {
             id: item['id'],
             name: item.at_xpath('name')&.[]('value'),
             yearpublished: item.at_xpath('yearpublished')&.[]('value'),
-            image: item.at_xpath('thumbnail')&.text
+            # ICI : On récupère le thumbnail s'il existe dans le résultat de recherche
+            thumbnail: item.at_xpath('thumbnail')&.[]('value') 
           }
         end
+        
         { bgg: results }
       end
 
