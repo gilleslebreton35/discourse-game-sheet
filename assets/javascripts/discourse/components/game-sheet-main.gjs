@@ -4,7 +4,6 @@ import { action } from "@ember/object";
 import { on } from "@ember/modifier";
 import { debounce } from "@ember/runloop";
 import { ajax } from "discourse/lib/ajax";
-import { eq } from "discourse/helpers/eq";
 
 export default class GameSheetMain extends Component {
   @tracked query = "";
@@ -81,11 +80,11 @@ export default class GameSheetMain extends Component {
           </div>
 
           <label>Catégorie :</label>
-          <select {{on "change" this.updateCategory}}>
+          {{!-- On lie la valeur du select à destinationCategory --}}
+          <select {{on "change" this.updateCategory}} value={{this.destinationCategory}}>
             <option value="">Choisir une catégorie</option>
             {{#each this.categories as |cat|}}
-              {{!-- Correction ici : suppression du helper 'number' --}}
-              <option value={{cat.id}} selected={{eq cat.id this.destinationCategory}}>
+              <option value={{cat.id}}>
                 {{cat.name}}
               </option>
             {{/each}}
