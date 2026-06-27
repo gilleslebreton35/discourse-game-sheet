@@ -23,7 +23,6 @@ export default class GameSheetMain extends Component {
     if (!this.selectedGame?.videos) return [];
     
     return this.selectedGame.videos.filter(v => {
-      // Comparison is now case-insensitive because Ruby code forces lowercase
       const matchesLang = (this.languageFilter === "ALL" || v.language === this.languageFilter);
       const matchesCat = (this.categoryFilter === "ALL" || v.category === this.categoryFilter);
       return matchesLang && matchesCat;
@@ -112,13 +111,10 @@ export default class GameSheetMain extends Component {
               <div style="margin-bottom: 15px; font-weight: bold; color: #444; background: #f0f0f0; padding: 10px; border-radius: 5px; display: inline-block;">
                 👤 {{this.selectedGame.minplayers}}-{{this.selectedGame.maxplayers}} j | ⏳ {{this.selectedGame.playingtime}} min | 🎂 {{this.selectedGame.minage}}+
               </div>
-              <div style="max-height: 130px; overflow-y: auto; font-size: 0.95em; color: #333; white-space: pre-wrap; padding-right: 10px;">
-                {{this.selectedGame.description}}
-              </div>
             </div>
           </div>
           
-          <h3>🎥 Vidéos</h3>
+          <h3>🎥 Vidéos ({{this.filteredVideos.length}} trouvées)</h3>
           <div style="display:flex; gap:10px; margin-bottom:15px;">
             <select {{on "change" this.updateLanguage}} style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
               <option value="ALL">Toutes langues</option>
@@ -149,16 +145,14 @@ export default class GameSheetMain extends Component {
                       {{video.title}}
                     </strong>
                   </div>
-                  <div style="display: flex; justify-content: space-between; font-size: 0.75em; color: #666; margin-left: 22px; text-transform: uppercase; font-weight: bold;">
-                    <span>{{video.language}}</span>
-                    <span>{{video.category}}</span>
+                  {{! DEBUG VIEW: Affiche la langue et la catégorie sous le titre }}
+                  <div style="margin-top: 5px; font-size: 0.75em; color: #555; background: #eee; padding: 3px; border-radius: 3px; display: inline-block;">
+                    L: {{video.language}} | C: {{video.category}}
                   </div>
                 </div>
               </label>
             {{/each}}
           </div>
-
-          <hr style="margin: 30px 0; border: 0; border-top: 1px solid #ddd;" />
 
           <select {{on "change" this.setCategory}} style="width:100%; margin:20px 0; padding:10px;">
             <option value="">-- Catégorie destination --</option>
