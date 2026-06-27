@@ -21,23 +21,18 @@ export default class GameSheetMain extends Component {
 
   get filteredVideos() {
     if (!this.selectedGame?.videos) return [];
+    
     return this.selectedGame.videos.filter(v => {
+      // Comparison is now case-insensitive because Ruby code forces lowercase
       const matchesLang = (this.languageFilter === "ALL" || v.language === this.languageFilter);
       const matchesCat = (this.categoryFilter === "ALL" || v.category === this.categoryFilter);
       return matchesLang && matchesCat;
     });
   }
 
-  @action
-  setCategory(event) {
-    this.destinationCategory = event.target.value;
-  }
-
-  @action
-  updateLanguage(event) { this.languageFilter = event.target.value; }
-
-  @action
-  updateCategoryFilter(event) { this.categoryFilter = event.target.value; }
+  @action setCategory(event) { this.destinationCategory = event.target.value; }
+  @action updateLanguage(event) { this.languageFilter = event.target.value; }
+  @action updateCategoryFilter(event) { this.categoryFilter = event.target.value; }
 
   @action
   updateQuery(event) {
@@ -108,7 +103,6 @@ export default class GameSheetMain extends Component {
       {{#if this.selectedGame}}
         <div style="margin-top:20px; padding:20px; border:1px solid #ddd; background:#f9f9f9; border-radius:8px;">
           
-          {{! EN-TÊTE DU JEU }}
           <div style="display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 30px; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             {{#if this.selectedGame.image}}
               <img src={{this.selectedGame.image}} style="width: 220px; max-height: 250px; object-fit: contain; border-radius: 4px;" />
@@ -116,9 +110,7 @@ export default class GameSheetMain extends Component {
             <div style="flex: 1; min-width: 280px;">
               <h2 style="margin-top: 0;">{{this.selectedGame.name}}</h2>
               <div style="margin-bottom: 15px; font-weight: bold; color: #444; background: #f0f0f0; padding: 10px; border-radius: 5px; display: inline-block;">
-                👤 {{this.selectedGame.minplayers}}-{{this.selectedGame.maxplayers}} joueurs &nbsp;|&nbsp; 
-                ⏳ {{this.selectedGame.playingtime}} min &nbsp;|&nbsp; 
-                🎂 {{this.selectedGame.minage}}+ ans
+                👤 {{this.selectedGame.minplayers}}-{{this.selectedGame.maxplayers}} j | ⏳ {{this.selectedGame.playingtime}} min | 🎂 {{this.selectedGame.minage}}+
               </div>
               <div style="max-height: 130px; overflow-y: auto; font-size: 0.95em; color: #333; white-space: pre-wrap; padding-right: 10px;">
                 {{this.selectedGame.description}}
@@ -126,12 +118,12 @@ export default class GameSheetMain extends Component {
             </div>
           </div>
           
-          <h3>Vidéos</h3>
+          <h3>🎥 Vidéos</h3>
           <div style="display:flex; gap:10px; margin-bottom:15px;">
             <select {{on "change" this.updateLanguage}} style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
               <option value="ALL">Toutes langues</option>
-              <option value="French">Français</option>
-              <option value="English">Anglais</option>
+              <option value="french">Français</option>
+              <option value="english">Anglais</option>
             </select>
             <select {{on "change" this.updateCategoryFilter}} style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
               <option value="ALL">Toutes catégories</option>
@@ -141,14 +133,13 @@ export default class GameSheetMain extends Component {
             </select>
           </div>
 
-          {{! GRILLE DES VIDÉOS }}
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; max-height: 500px; overflow-y: auto; padding-right: 10px; margin-bottom: 30px;">
             {{#each this.filteredVideos as |video|}}
               <label style="display: block; border: 2px solid {{if (this.isFieldChecked video.link) '#2196F3' 'transparent'}}; border-radius: 6px; overflow: hidden; background: {{if (this.isFieldChecked video.link) '#e3f2fd' '#fff'}}; cursor: pointer; transition: 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 {{#if video.thumbnail}}
                   <img src={{video.thumbnail}} style="width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block;" />
                 {{else}}
-                  <div style="width: 100%; aspect-ratio: 16/9; background: #eee; display: flex; align-items: center; justify-content: center; color: #999;">Sans aperçu</div>
+                  <div style="width: 100%; aspect-ratio: 16/9; background: #eee; display: flex; align-items: center; justify-content: center; color: #999;">Pas d'aperçu</div>
                 {{/if}}
                 
                 <div style="padding: 12px;">
