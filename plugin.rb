@@ -1,6 +1,6 @@
 # name: discourse-game-sheet
 # about: Plugin pour créer des fiches de jeux depuis BGG
-# version: 0.8.0
+# version: 0.8.1
 # authors: Toi
 
 enabled_site_setting :game_sheet_enabled
@@ -71,12 +71,18 @@ after_initialize do
         item = doc.at_xpath('//item')
         return { error: "Non trouvé" } unless item
         
-        # Extraction complète des vidéos avec miniature YouTube, catégorie et langue
+        # Extraction robuste des vidéos
         videos = doc.xpath('//video').map do |v|
           link = v['link'].to_s
-          thumbnail = nil
           
-          # Regex pour extraire l'ID YouTube et créer le lien de la miniature
+          # On récupère l'attribut, on met en minuscule, ou on met 'unknown' par défaut
+          lang = v['language'] ? v['language'].to_s.downcase.strip : "unknown"
+          cat = v['category'] ? v['category'].to_s.downcase.strip : "unknown"
+          
+          # TRACEUR : Utile pour vérifier ce que BGG envoie vraiment
+          Rails.logger.info("BGG_DEBUG: Video '#{v['title']}' | Lang: '#{lang}' | Cat: '#{cat}'")
+
+          thumbnail = nil
           if link =~ /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/
             thumbnail = "https://img.youtube.com/vi/#{$1}/mqdefault.jpg"
           end
@@ -84,8 +90,8 @@ after_initialize do
           {
             title: v['title'],
             link: link,
-            category: v['category'],
-            language: v['language'],
+            category: cat,
+            language: lang,
             thumbnail: thumbnail
           }
         end
