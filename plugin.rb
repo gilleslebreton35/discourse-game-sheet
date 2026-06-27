@@ -1,6 +1,6 @@
 # name: discourse-game-sheet
 # about: Plugin pour créer des fiches de jeux depuis BGG
-# version: 0.7.2
+# version: 0.8.0
 # authors: Toi
 
 enabled_site_setting :game_sheet_enabled
@@ -71,13 +71,22 @@ after_initialize do
         item = doc.at_xpath('//item')
         return { error: "Non trouvé" } unless item
         
-        # Extraction complète des vidéos avec catégorie et langue pour le filtrage JS
+        # Extraction complète des vidéos avec miniature YouTube, catégorie et langue
         videos = doc.xpath('//video').map do |v|
+          link = v['link'].to_s
+          thumbnail = nil
+          
+          # Regex pour extraire l'ID YouTube et créer le lien de la miniature
+          if link =~ /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/
+            thumbnail = "https://img.youtube.com/vi/#{$1}/mqdefault.jpg"
+          end
+
           {
             title: v['title'],
-            link: v['link'],
+            link: link,
             category: v['category'],
-            language: v['language']
+            language: v['language'],
+            thumbnail: thumbnail
           }
         end
         
